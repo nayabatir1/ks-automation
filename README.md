@@ -1,0 +1,255 @@
+# ks: Kingshot bot
+
+Plays the timed parts of **Kingshot** (`com.run.tower.defense`) on an Android phone, on a schedule, from a
+Debian server over USB, using **plain adb only**. Nothing is installed on the phone. The screen is read from
+screenshots, text with Tesseract OCR and icons with OpenCV template matching. Input goes through
+`adb shell input`.
+
+```
+game.py           Kingshot: launch/loading/pop-ups (on_open, before_job) + shared helpers
+regions.py        screen areas shared by all jobs (Q1-Q4, LEFT_MID, NAV_REGION, ...)
+jobs/             one file per job (online_rewards.py, ...); files starting with _ are ignored
+templates/        icon images for image= (made with tools.py crop / tools.py template)
+run.py            runner: picks due jobs, wakes phone, opens game, runs jobs, closes game, sleeps phone
+tools.py          terminal helpers for building jobs (ocr, find, crop, template, tap, ...)
+config.py         settings; secrets/overrides go in .env (see .env.example)
+core/             engine: phone.py (adb + screen helpers), vision.py (OCR + template matching),
+                  schedule.py (Every/At/Cron with tz=), task.py (@job), state.py, loader.py
+systemd/          timer + service units (installed by install.sh)
+logs/             runner.log + failures/ (screenshot + OCR text when a job fails)
+state.json        per job: last run (UTC), status, error, duration, next_at
+```
+
+## Status (2026-10-03)
+
+Phone: Samsung Galaxy M30s (SM-M307F, Android 11, 1080x2340), serial `RZ8M920GS2J`, no lock screen.
+
+- Done: `install.sh` has been run (Tesseract 5.5, `adb-server.service` and `android-cron.timer` are enabled, NTP is on).
+  The runner, OCR, taps, and the start of every session (open game, close pop-ups) work on the phone.
+- **Live jobs:** `online_rewards`, `alliance_tech_contribution` (every ~4 h, when all 25 attempts are back) and
+  `conquest` (every 9 h).
+  The timer runs `online_rewards` on its own (World -> side panel -> Online Rewards ->
+  the chest is claimed by opening it -> read countdown -> close the game -> phone to sleep), about 60 s per run.
+
+Progress log, 2026-10-02:
+1. Reviewed the first (uiautomator2) version. uiautomator2 doesn't work for this game, so the project was rewritten
+   to use plain adb: OCR + OpenCV for reading the screen, `adb shell input` for taps and typing. The uiautomator2
+   helper files it had left on the phone (`/data/local/tmp/u2*`) were deleted.
+2. Found that `screencap -p` is slow on this phone (4.4 s) and switched to raw `screencap` (1.2 s).
+3. Built the runner, tools.py, the schedules with tz=, the systemd timer and install.sh. 22 schedule tests pass.
+4. Ran `sudo ./install.sh`. The timer fires every minute and runs cleanly.
+5. Tested on the phone: wake/sleep, `tools.py ocr`, taps, and a Settings demo task. Fixed OCR joining
+   words out of order in a line.
+
+Progress log, 2026-10-03:
+6. Added jobs, each with its own next-run time (see "Jobs" below). Added `run.py --timeline`, `--job`,
+   and `phone.read_duration()`. Tested with a fake phone (18 checks).
+7. Started Kingshot. Opening the game works: the loading bar shows up after about 8 s and the game is loaded after
+   about 21 s, ending on an offer pop-up. Saved the pop-up close button as `templates/close_x.png`.
+   Warning: the start-up pop-ups have real-money buttons (e.g. ₹89.00).
+8. Closing the start-up pop-ups works: it taps the X (`templates/close_x.png`, Q1) until the city screen's bottom
+   menu (`Backpack`) shows with no X left, checked twice 2 s apart. The city screen is animated, so `wait_stable`
+   can't be used there. A full open + pop-ups takes about 30 s.
+9. Moved the shared start/end into the runner as `on_open` / `before_job` hooks (wrapper), so every job starts
+   on the city screen and the game is always closed afterwards. Tested with a fake phone (hook order,
+   including failures) and on the real phone.
+10. Job `online_rewards` step 1: tap the World icon (`templates/world_icon.png`, Q4), then confirm the world map by
+    the bottom-right button changing to "Town". Added `tools.py template FILE NAME`, which imports an icon from any
+    screenshot (e.g. a Mac one at a different size), finds it on the phone at the matching scale, and saves the
+    phone's own pixels as the template.
+11. `online_rewards` step 2: tap the side tab `>` on the left edge (`templates/side_tab.png`, `LEFT_MID`), then confirm
+    the side panel by "Building Queue" or "Wilderness". The Mac screenshot didn't match on the world map, so the
+    template was cut from the phone screen, leaving out the red notification dot. `tools.py template` now only
+    tries scales 1-4x, because tiny scales gave false matches.
+12. Restructured for readability: one file per job in `jobs/`, the game in `game.py`, shared areas in `regions.py`.
+    Removed the multi-app layer (`tasks/`, the Settings demo and the app templates), because this project is only
+    about Kingshot. Quadrants use the normal maths numbering. A full run of `online_rewards` so far takes about 44 s.
+13. Added ruff (`.venv/bin/ruff check --fix .`). Sorted the imports in every file and fixed the other lint findings
+    (loop-variable closures, broad `except`s narrowed to `PhoneError`, explicit `check=False`, and so on).
+14. `online_rewards` steps 3-4: scroll inside the side panel until "Online Rewards" shows (`phone.scroll_to` now
+    swipes inside `region=` so the world map behind doesn't move), then tap it. That opens the chest screen with
+    "Next Chest Ready In: 00:00:27". `phone.read_duration(region=CHEST_TIMER)` reads that countdown correctly.
+15. The game no longer restarts if it's already open (`reuse_open_app = True` in game.py): `on_open` just checks it's
+    on the city or world map (closing any pop-up), and restarts it only if it's on a screen it doesn't know.
+    `online_rewards` skips the World tap when it's already on the world map. Added `run.py --keep-open`, which leaves
+    the game open after a run (for building jobs step by step). A run on the already-open game took 25 s.
+16. `online_rewards` is complete: after the chest screen opens it reads "Next Chest Ready In", taps a blank spot
+    (`BLANK_SPOT`) to close the screen, and returns the countdown + 10 s as its next run. Real run: 24 s,
+    "next chest in 0:01:27".
+17. Jobs due at the same time share one session (one launch, one close). After the due jobs, if any job (or the same
+    one again) comes due within `session_wait_minutes` (5), the game stays open and the runner waits for it instead of
+    closing and reopening. Sessions are capped at `max_session_minutes` (20). `--job` runs don't wait. Tested with a
+    fake phone.
+18. Changed at the user's request: the game stays open after a session only if the next job (any job) is due
+    within 10 s (`session_wait_seconds`); otherwise it is always closed. Tested with a fake phone.
+19. Every run first checks that the phone is connected (`adb get-state`). If it isn't, no job runs and no job state
+    changes; the log gets one warning when it goes away and one line when it's back.
+20. Enabled the game. The first automatic run failed safely: my earlier test had left the side panel open, so the
+    side tab was hidden. Fixed: step 2 skips the tap when the panel ("Wilderness") is already open, and step 3 also
+    scrolls up. Since then the timer runs it on its own: opening Online Rewards claims a ready chest, and the job
+    reads the next countdown and comes back then.
+21. New start-up pop-up "Welcome back!" (offline income, shows now and then after the game opens). It made a timer
+    run fail ("app did not open"). Now `close_popups` (run by `on_open` for every session, so for every job) taps its
+    green **Confirm** (user's choice) inside `WELCOME_CONFIRM`. Tested: offer X -> Welcome back -> Confirm -> job ok.
+22. Old failure snapshots are now deleted automatically (7 days / newest 20), saved as JPEG (~10x smaller than PNG),
+    and the OCR text file gets the right name (it used to come out as `kingshot.txt` because of the dot in job names).
+23. Playing on your own phone (the game allows one session):
+    - Pause switch: `run.py --pause [2h|90m]` (default 1 h) and `run.py --resume`, stored in `pause.json`. While
+      paused, timer runs do nothing and manual runs refuse. A pause always ends by itself.
+    - Kick detection: when opening the game or a job fails, the runner checks for "The account has been logged in on
+      another device". If it's there, it closes the bot's game (never taps Reconnect), pauses 1 h
+      (`SESSION_TAKEN_PAUSE_MINUTES`), and leaves the jobs as they were, without counting a failure.
+    - After a pause/cooldown, the first tick runs **all** pending jobs together. Jobs have no "too late" cutoff.
+    Tested with a fake phone (kick during a job, kick while opening, pause mid-session, expiry, pending jobs after it)
+    and on the command line.
+24. Started job `alliance_tech_contribution` (`jobs/alliance_tech_contribution.py`, `@job(enabled=False)` until done).
+    Opening the game and closing pop-ups come from `on_open`, so the job body starts on the city screen.
+25. `alliance_tech_contribution` step 1: tap "Alliance" in the bottom menu's Q4 half (`NAV_Q4`, text match, so the
+    99+ badge doesn't matter), then confirm the Alliance screen by its title (`ALLIANCE_TITLE`).
+26. `alliance_tech_contribution` step 2: tap the Tech button (`templates/tech_button.png`, book icon + label without
+    the changing badge, `Q4_TOP`), then confirm the tech screen by "Your Rank" (`TECH_HEADER`; OCR sometimes reads "Your Rankin"). OCR can't read the
+    big outlined button labels on the Alliance screen, so this one is matched as an image.
+27. `alliance_tech_contribution` step 3: tap the Covenant-Making node (`templates/covenant_making.png`, castle art only,
+    `BOTTOM_MID`) -> its contribution box (title checked in `TECH_BOX_TITLE`). **The box's left Contribute button
+    costs gems; never tap it.** The right one costs 10,000 bread ("Attempts: 25/25").
+28. `alliance_tech_contribution` step 4: hold the RIGHT (bread) Contribute button for 5 s (`phone.hold_xy`); it greys
+    out ("Attempts: 0/25"). Safety, because the LEFT button spends gems and its label scores 0.96 on the same
+    template: the search covers only the right half (`CONTRIBUTE_RIGHT`), and the button must be teal
+    (`vision.median_hue` 75-105; bread button 91, gem button 19) before it's touched. Tested on the phone: attempts
+    25 -> 0, gems unchanged. Afterwards the box shows "New Contribution attempt in 00:09:53".
+29. `alliance_tech_contribution` is complete and **live**: after the hold it reads "New Contribution attempt in …"
+    (`NEXT_ATTEMPT`) and comes back after that + 240 min (24 more attempts x 10 min), when all 25 attempts are back.
+    If the button is already grey (no attempts, `vision.coloured_share` < 0.3) it skips the hold and just reads the
+    timer. Real run: grey -> "next attempt in 0:06:44" -> next run 4 h 07 m later.
+30. Faster UI actions:
+    - Taps, holds and Back go through Android's built-in `monkey --port` (started once per session, quit at the
+      end): ~0.06 s per tap instead of ~1 s for `input tap` (which starts a Java process each time). It falls back to
+      `input` if monkey can't start. Raw `sendevent` touches are blocked on this Samsung (SELinux). Swipes stay on
+      `input swipe`, because monkey's "touch move" doesn't drag Unity lists.
+    - Checks with a region fetch only those screen rows (~0.3 s instead of ~1.1 s for a full screenshot).
+    - Fixed pauses after taps were replaced by waiting for the next screen (or for a pop-up to disappear).
+    - `scroll_to` swipes further and faster, and remembers how many swipes it needed (`scroll_memory.json`) so next
+      time it does them in one go.
+    - Between jobs, `before_job` presses Back until the bottom menu shows (a job may end deep in a menu).
+    - `online_rewards`: "Online Rewards" sits just above "Water Essence Gathering" and is only there when a chest is
+      ready, so the job scrolls to Water Essence and looks above it. Not there = no reward yet: it keeps the known
+      chest time (or checks again in 30 min). That's not a failure.
+    Results: `alliance_tech_contribution` 17.8 s -> 6.2 s (11.5 s with the 5 s hold); `online_rewards` with no reward
+    ready 75 s -> 14 s.
+31. Quicker first tap: `close_popups` returns as soon as the bottom menu shows (no extra "late pop-up" look), monkey is
+    started while the game loads, and a check may reuse a screenshot that's under 1 s old if nothing was tapped since.
+    Each job's first tap goes through `Kingshot.tap_on_main()`, which taps straight away; if a late pop-up shows up
+    instead, it closes that first. Pop-up handling 5-8 s -> 3 s.
+32. Keyboards off: every session starts with `phone.disable_keyboards()` (`ime disable` for every enabled keyboard,
+    including Samsung Keyboard and Google voice typing), because they come back on after reboots or updates. It logs
+    when it finds one switched back on. `DISABLE_KEYBOARDS` in config.py turns this off. To type on the bot phone by
+    hand: `adb shell ime enable com.samsung.android.honeyboard/.service.HoneyBoardService` (the next session switches
+    it off again).
+33. New job `conquest` (`jobs/conquest.py`, disabled until done). Step 1: tap "Conquest" in the bottom menu's Q3 half
+    (`NAV_Q3`, via `tap_on_main`), then confirm the Conquest screen by its "Conquer" button (`CONQUER_BUTTON`).
+34. `conquest` is complete and **live** (every 9 h): Conquest -> the chest's Claim (only if **green**;
+    `coloured_share` > 0.3; grey right after a claim) -> "Idle Income" box -> its Claim -> close the "Rewards" screen
+    ("Tap anywhere to exit") -> come back in 9 h ("Max Idle Time: 9 hrs"). After it, the runner does the next due job or
+    closes the game. Grey Claim = nothing yet: keep the known time, or 9 h.
+35. OCR fix: the white-text pass discarded letters taller than 12% of the area being read, so big button labels
+    in small regions vanished ("Claim" in the Idle Income box, "Your Rankin(g)"). The limit is now a fixed 150 px.
+
+Where to see the next run time: `run.py --timeline` (or `--list`, `state.json` next_at, and the log's "next ..." line).
+
+Next: the next job. Take care when tapping in Kingshot: the start-up pop-ups have purchase
+buttons, and the chat screen has a SEND button.
+
+## Setup
+
+On the phone: Settings → About phone → Software information → tap **Build number** 7 times →
+back to Settings → **Developer options** → turn on **USB debugging**. Plug in USB and accept the
+"Allow USB debugging?" prompt (tick *Always allow*). For a bot phone, set the screen lock to **None** or
+**Swipe**. If you keep a PIN, put `PHONE_PIN=1234` in `.env`.
+
+On the server, from this folder:
+
+```bash
+sudo ./install.sh          # apt packages, venv, systemd timer (every minute), NTP
+adb devices                # phone must say "device"
+```
+
+Pause it while you play on your own phone (the game allows only one session):
+
+```bash
+.venv/bin/python run.py --pause 2h      # or 90m; no duration = 1 h. Ends by itself.
+.venv/bin/python run.py --resume        # end it now
+```
+
+If you log in on your phone while the bot is playing, the bot sees "logged in on another device", closes its game
+without reconnecting, and pauses itself for 1 h. After any pause, all pending jobs run on the next tick.
+
+Check it:
+
+```bash
+.venv/bin/python run.py --list                 # jobs, next run (IST + UTC), last status
+.venv/bin/python run.py --timeline             # every job, in the order it will run
+systemctl list-timers android-cron.timer
+sudo journalctl -u android-cron.service -n 50  # timer runs (no sudo needed if you're in group adm)
+tail -f logs/runner.log
+```
+
+## Jobs
+
+A session always looks like this; the runner does the wrapping, so a job file contains only its own steps:
+
+```
+launch game -> on_open()          (loading screen, start-up pop-ups; also after a crash-restart)
+  -> before_job() -> job          (for each due job: make sure the city screen is showing)
+  -> ...
+close game                        (always, even after errors)
+```
+
+Every due job runs in one session, lowest `priority` first, so jobs due at the same time share one launch.
+Afterwards the runner looks at the next due time across **all** jobs: if it's within `session_wait_seconds` (10 s),
+the game stays open for it; otherwise the game is closed. A session lasts at most `max_session_minutes` (20).
+
+Each job returns when it may run next: a `timedelta` (e.g. `phone.read_duration(region=...)` on a countdown
+like "03:12:45"), a `datetime`, or `None` to use its `schedule=`. A failed job retries after `retry_minutes`,
+and the game is restarted before the next job. The times are kept in `state.json` under keys like
+`"kingshot.online_rewards": {..., "next_at": "...UTC"}`. To make a job run again right away, delete its entry.
+
+### Add a job
+
+1. `cp jobs/_template.py jobs/my_job.py` and rename the function to `my_job`.
+2. Walk through the screens from the terminal: `tools.py ocr` lists every text with the point to tap.
+   For icons: `tools.py template temp/screenshot.png my_icon` (from a Mac/PC screenshot) or
+   `tools.py crop x1 y1 x2 y2 my_icon` (straight from the phone), then use `image="my_icon"`.
+3. Use `wait_for` / `tap` / `wait_any` with a `region=` from `regions.py`, and after each tap wait for something
+   that proves the next screen is really there.
+4. `.venv/bin/ruff check --fix .` (import order and lint), then
+   `.venv/bin/python run.py --job my_job --no-sleep --keep-open` (`--keep-open` leaves the game open, and the
+   next run reuses it instead of restarting). If it fails, `logs/failures/` has a screenshot and OCR text.
+5. When all jobs work, set `enabled = True` in `game.py`. The timer picks them up within a minute.
+
+## tools.py commands
+
+```
+ocr [x1 y1 x2 y2]          all text + tap coordinates ([light] = found by the white-text pass)
+find "text" [x1 y1 x2 y2]  same matching as jobs use
+shot [file.png]            save a screenshot (default screen.png)
+crop x1 y1 x2 y2 NAME      save part of the screen as templates/NAME.png
+template FILE NAME [region] import an icon from any screenshot (Mac/PC, any size) as templates/NAME.png
+findimg NAME               where is that template on screen?
+tap X Y | swipe X1 Y1 X2 Y2 [ms] | back | home | text "hello"
+app | packages [filter] | wake | sleep
+```
+
+Coordinates are pixels, or fractions such as `0.5` (x and y from 0 to 1).
+
+## Notes
+
+- Screenshots use raw `screencap`, which takes about 1.2 s on this phone; `screencap -p` takes about 4.4 s.
+  If the raw format isn't recognised, the code falls back to PNG.
+- `systemd/adb-server.service` keeps one adb server running. Without it, each timer run would start
+  its own server, and systemd would kill it at the end of the run.
+- Old logs are cleared automatically: `logs/runner.log` rotates at 2 MB and keeps 5 old copies (~12 MB max);
+  `logs/failures/` keeps snapshots (JPEG + OCR text) for 7 days and at most the newest 20
+  (`FAILURE_KEEP_DAYS` / `FAILURE_KEEP_MAX` in config.py); the systemd journal is capped by journald.
+- Logs and `state.json` times are in UTC. `--list` shows next runs in both IST and UTC.
+- Fixed-time jobs: `@job(schedule=At("00:05", tz="UTC"))`, `Every(hours=4)`, `Cron("0 */2 * * *")`.
+  Without `tz=`, `SCHEDULE_TZ` (default UTC) is used.

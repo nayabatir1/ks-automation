@@ -1,0 +1,12 @@
+.venv/
+logs/
+state.json
+state.tmp
+.runner.lock
+.env
+screen.png
+__pycache__/
+.ruff_cache/
+pause.json
+scroll_memory.json
+temp/

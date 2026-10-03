@@ -1,0 +1,10 @@
+[Unit]
+Description=android-cron: check for due phone tasks every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

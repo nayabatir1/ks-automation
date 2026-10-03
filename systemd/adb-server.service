@@ -1,0 +1,12 @@
+[Unit]
+Description=adb server for android-cron
+After=network.target
+
+[Service]
+User=__USER__
+ExecStart=/usr/bin/adb server nodaemon
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

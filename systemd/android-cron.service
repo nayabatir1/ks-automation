@@ -1,0 +1,13 @@
+[Unit]
+Description=android-cron: run due phone tasks
+Wants=adb-server.service
+After=adb-server.service time-sync.target
+
+[Service]
+Type=oneshot
+User=__USER__
+WorkingDirectory=__DIR__
+EnvironmentFile=-__DIR__/.env
+ExecStart=__DIR__/.venv/bin/python __DIR__/run.py
+# the runner enforces per-task timeouts; this is just a safety net
+TimeoutStartSec=3h
