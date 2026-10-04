@@ -49,7 +49,7 @@ def arena(app, phone, log):
     # !! "+" next to "Daily challenges: N" probably buys attempts (gems): never tap it.
 
     # 5. attack until the daily attempts are used: the lowest-powered opponent weaker than me (power in green);
-    #    none -> Free Refresh (only if it's free). Each fight: Fight -> pause -> Retreat (ends it at once, as a
+    #    none -> Free Refresh (only if it's free); refreshes used up -> the lowest-powered red one. Each fight: Fight -> pause -> Retreat (ends it at once, as a
     #    loss: the user's choice) -> tap anywhere to exit -> back to the Challenge List.
     #    !! Out of attempts the game offers more for gems: we stop at 0 and never tap "+" or anything with gems.
     attack_all(phone, log)
@@ -72,11 +72,14 @@ def attack_all(phone, log):
             return
         y = weakest_opponent(phone, log)
         if y is None:
-            if refreshes >= MAX_REFRESHES or not free_refresh(phone, log):
-                log.info("no weaker opponent and no free refresh; done for now")
+            if refreshes < MAX_REFRESHES and free_refresh(phone, log):
+                refreshes += 1
+                continue
+            y = weakest_opponent(phone, log, red=True)             # refreshes used up: the weakest stronger one
+            if y is None:
+                log.info("no opponent found; done for now")
                 return
-            refreshes += 1
-            continue
+            log.info("no green opponent and no free refresh: attacking the lowest red")
         fight(phone, log, y)
     log.info("stopped after %d fights (safety limit)", MAX_FIGHTS)
 
@@ -101,9 +104,12 @@ def attempts_left(phone):
 
 
 def opponents(phone):
-    """[(y, green, power_digits)] for the rows in the Challenge List, top to bottom. green = power lower than mine.
-    power_digits: the power beside the fist as whole digits (15.9M -> 159; all rows use the same format), or None."""
-    img = phone.screen((0, 0.28, 1, 0.74))
+    return read_opponents(phone.screen((0, 0.28, 1, 0.74)))
+
+
+def read_opponents(img):
+    """[(y, green, power)] for the rows in the Challenge List, top to bottom. green = power lower than mine (the
+    game's own colour). power: the real value (15.9M -> 15,900,000; 166,500 -> 166,500), or None if unreadable."""
     x1, x2, y1, y2 = POWER_X[0], POWER_X[1], 700, 1720
     hsv = cv2.cvtColor(img[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
     coloured = (hsv[:, :, 1] > 120) & (hsv[:, :, 2] > 80)
@@ -116,32 +122,42 @@ def opponents(phone):
                 hue = float(np.median(hsv[start:i, :, 0][coloured[start:i]]))
                 y = y1 + (start + i) // 2
                 green = 35 <= hue <= 85
-                rows.append((y, green, power_digits(img, y) if green else None))
+                rows.append((y, green, power_value(img, y)))
             start = None
     return rows
 
 
-def power_digits(img, y):
-    """Coloured power figure as whole digits; reads it two ways and keeps the longest (OCR tends to drop a digit)."""
+def power_value(img, y):
+    """The coloured power figure beside the fist, as a real number. Two formats: "15.9M" (1M and up, always one
+    decimal) and "166,500" (under 1M, full number). OCR loses the dot and commas, so: digits read + whether there's
+    an M. A reading of 1-3 digits can only be the M format (full numbers have 4+ digits)."""
     part = img[y - 30:y + 30, POWER_X[0] - 10:POWER_X[1] + 10]
-    sat = cv2.cvtColor(part, cv2.COLOR_BGR2HSV)[:, :, 1]
+    hsv = cv2.cvtColor(part, cv2.COLOR_BGR2HSV)
+    sat, val = hsv[:, :, 1], hsv[:, :, 2]
     reads = []
-    for mask in (sat > 120, sat > cv2.threshold(sat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[0]):
+    for mask in ((sat > 100) & (val > 150),             # bright fill only, no dark outline: the most exact, so first
+                 sat > 120, sat > cv2.threshold(sat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[0]):
         big = cv2.resize(mask.astype(np.uint8) * 255, None, fx=4, fy=4, interpolation=cv2.INTER_NEAREST)
         big = cv2.copyMakeBorder(255 - big, 30, 30, 60, 30, cv2.BORDER_CONSTANT, value=255)
         for psm in (7, 8):
-            text = pytesseract.image_to_string(big, config=f"--psm {psm} -c tessedit_char_whitelist=0123456789.M")
-            reads.append(re.sub(r"\D", "", text))
-    best = max(reads, key=len)
-    return int(best) if best else None
+            reads.append(pytesseract.image_to_string(
+                big, config=f"--psm {psm} -c tessedit_char_whitelist=0123456789.,M").strip())
+    digits = max((re.sub(r"\D", "", r) for r in reads), key=len)    # longest (first on a tie): OCR drops digits
+    if not digits:
+        return None
+    if any("M" in r for r in reads) or len(digits) <= 3:
+        return int(digits) * 100_000                                 # 159 -> 15.9M
+    return int(digits)
 
 
-def weakest_opponent(phone, log):
-    """y of the lowest-powered green (weaker than me) opponent, or None if there isn't one."""
+def weakest_opponent(phone, log, red=False):
+    """y of the lowest-powered green (weaker than me) opponent, or None if there isn't one.
+    red=True: the lowest-powered red one instead (used only once the free refreshes are gone)."""
     rows = opponents(phone)
-    log.info("opponents: %s", ", ".join(f"{'green' if g else 'red'} {p if p is not None else '?'}" for _, g, p in rows))
-    greens = [(p if p is not None else 10**9, y) for y, g, p in rows if g]       # unreadable power: last choice
-    return min(greens)[1] if greens else None
+    log.info("opponents: %s", ", ".join(f"{'green' if g else 'red'} {p:,}" if p else f"{'green' if g else 'red'} ?"
+                                        for _, g, p in rows))
+    pick = [(p if p is not None else 10**12, y) for y, g, p in rows if g != red]   # unreadable power: last choice
+    return min(pick)[1] if pick else None
 
 
 def open_challenge_list(phone):
@@ -202,13 +218,19 @@ def free_refresh(phone, log):
 
 
 def my_standing(phone):
-    """(rank, points) from your own row: the left-most number is the rank, the right-most the Arena Points."""
+    return read_standing(phone.screen(ARENA_MY_ROW))
+
+
+def read_standing(img):
+    """(rank, points) from your own row: the rank is the number at the far left (None when it says "Unranked"),
+    the points the right-most number. Name and power in between are ignored."""
     nums = []
-    for m in vision.ocr_lines(phone.screen(ARENA_MY_ROW), ARENA_MY_ROW):
+    for m in vision.ocr_lines(img, ARENA_MY_ROW):
         for word in m.text.split():
             if re.fullmatch(r"\d[\d,]*", word):
                 nums.append((m.center[0], int(word.replace(",", ""))))
     nums.sort()
-    if len(nums) < 2:
-        raise RuntimeError(f"could not read the arena rank and points (read {nums})")
-    return nums[0][1], nums[-1][1]
+    if not nums:
+        raise RuntimeError("could not read the arena points")
+    rank = nums[0][1] if nums[0][0] < img.shape[1] * 0.2 else None      # left edge only ("Unranked" = None)
+    return rank, nums[-1][1]

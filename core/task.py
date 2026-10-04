@@ -80,7 +80,7 @@ class Task:
     jobs_package: str | None = None
 
     # ------------------------------------------------------------------ hooks (the runner calls these)
-    # Every session:  launch app -> on_open() -> [before_job() -> job] ... -> close app (always)
+    # Every session:  launch app -> on_open() -> [before_job() -> job -> after_job()] ... -> close app (always)
     def on_open(self, phone, log):
         """Right after every app launch (also after a crash-restart): wait for loading, clear pop-ups.
         Default: nothing. Override per app."""
@@ -88,6 +88,9 @@ class Task:
     def before_job(self, phone, log):
         """Before each job (and before run()): make sure the app is on its main screen.
         Default: nothing. Override per app."""
+
+    def after_job(self, phone, log):
+        """After each job that went well: leave the job's pages. Default: nothing. Override per app."""
 
     def run(self, phone, log):
         """Simple tasks: do the work. The phone is awake and the app is already open in the foreground.

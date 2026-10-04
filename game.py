@@ -16,6 +16,7 @@ from core.task import Task
 from regions import (
     LOADING,
     LOADING_REGION,
+    NAV_Q4,
     NAV_REGION,
     POPUP_X_REGION,
     SESSION_TAKEN_TEXT,
@@ -54,9 +55,25 @@ class Kingshot(Task):
     def before_job(self, phone, log):
         if getattr(self, "_just_opened", False):   # on_open already left us on the city screen
             self._just_opened = False
-            return
-        self.to_main_screen(phone, log)              # the previous job may have ended deep in a menu
-        self.town_view = None                            # ...and moved the town view
+        else:
+            self.to_main_screen(phone, log)          # the previous job may have ended deep in a menu
+            self.town_view = None                        # ...and moved the town view
+        self.start_view = self.current_view(phone)
+
+    def after_job(self, phone, log):
+        """Close the job's pages and go back to the view the job started from: world map or town."""
+        self.to_main_screen(phone, log)
+        if self.current_view(phone) != self.start_view:
+            button, then = ("World", "Town") if self.start_view == "world" else ("Town", "World")
+            phone.tap(text=button, region=NAV_Q4, timeout=5)
+            phone.wait_for(text=then, region=NAV_Q4, timeout=15)
+            self.town_view = None
+        log.info("back on the %s", self.start_view)
+
+    @staticmethod
+    def current_view(phone):
+        """'world' or 'town': the bottom-right button names the other one."""
+        return "world" if phone.exists(text="Town", region=NAV_Q4) else "town"
 
     def session_taken(self, phone):
         """'The account has been logged in on another device.' (Tips box with Contact Us / Reconnect).

@@ -2,7 +2,7 @@
 """Main runner. The systemd timer starts this every minute; it decides what is due.
 
 Simple task due:  wake + unlock -> launch app -> on_open() -> before_job() -> run() -> close app
-@job task due:    wake + unlock -> launch app -> on_open() -> [before_job() -> job] for each due job
+@job task due:    wake + unlock -> launch app -> on_open() -> [before_job() -> job -> after_job()] for each due job
                   (lowest priority first) -> close app
                   (the app stays open only if the next job is due within session_wait_seconds = 10 s)
 After everything: put phone to sleep
@@ -282,7 +282,9 @@ def run_batch(phone, name, task, state, jobs, tlog):
 
         def work(j=j, jlog=jlog):
             task.before_job(phone, jlog)
-            return next_time(j, j.func(task, phone, jlog))
+            result = j.func(task, phone, jlog)
+            task.after_job(phone, jlog)
+            return next_time(j, result)
         status, error, nxt = call_with_timeout(timeout, work, key)
         secs = time.monotonic() - t0
         if status != "ok" and check_session_taken(phone, task, name):

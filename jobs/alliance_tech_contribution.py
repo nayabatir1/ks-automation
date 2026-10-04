@@ -12,7 +12,6 @@ from regions import (
     BOTTOM_MID,
     CONTRIBUTE_RIGHT,
     NAV_Q4,
-    NEXT_ATTEMPT,
     Q4_TOP,
     TECH_BOX_TITLE,
     TECH_HEADER,
@@ -52,10 +51,5 @@ def alliance_tech_contribution(app, phone, log):
         phone.hold_xy(cx, cy, seconds=5)
         log.info("held Contribute (bread) for 5 s")
 
-    # 5. Come back when all 25 attempts are back: "New Contribution attempt in 00:09:53" (the next attempt)
-    #    + 24 more attempts x 10 min.
-    wait = phone.read_duration(region=NEXT_ATTEMPT)
-    if wait is None:
-        raise RuntimeError("could not read 'New Contribution attempt in' countdown")
-    log.info("next attempt in %s; all 25 back in %s", wait, wait + timedelta(minutes=240))
-    return wait + timedelta(minutes=240)
+    # 5. All attempts are back exactly 250 min after they run out
+    return timedelta(minutes=250)

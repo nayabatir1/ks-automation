@@ -3,6 +3,7 @@
     parse_duration("03:12:45")        -> 3:12:45
     parse_duration("12:30")           -> 0:12:30   (two parts = mm:ss; two_part="hm" for hh:mm)
     parse_duration("1d 4h 20m")       -> 1 day, 4:20:00
+    parse_duration("Next free: 1d 07:59:52") -> 1 day, 7:59:52  ("Id" / "ld" too: OCR)
     parse_duration("Next in 2h 5min") -> 2:05:00
     parse_duration("Ready")           -> None
 """
@@ -38,6 +39,7 @@ def parse_duration(text: str, two_part: str = "ms") -> timedelta | None:
         text = text[:clock.start()] + " " + text[clock.end():]
 
     # unit style: 1d 4h 20m 5s / 2 hours 5 min
+    text = re.sub(r"(?<![A-Za-z])[Il|]d\b", "1d", text)          # OCR reads "1d" as "Id" / "ld"
     for num, unit in re.findall(r"(\d+)\s*([a-zA-Z]+)", text):
         mult = _UNITS.get(unit.lower())
         if mult:

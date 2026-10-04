@@ -202,6 +202,30 @@ Progress log, 2026-10-03:
 46. `arena` step 6: when the attempts are used up the job leaves the arena itself (2 Backs: Challenge List -> Arena ->
     town, ~2 s instead of ~25 s for the generic back-out), so the runner can go straight on to the next due job or close
     the game.
+47. `arena` power is compared as real values: "15.9M" (1M+, one decimal) -> 15,900,000 and "166,500" (under 1M, full
+    number) -> 166,500 (before, 15.9M would have counted as 159 and beaten 147,000). OCR reads the bright fill of the
+    digits first (no dark outline; fixed 60,000 being read as 40,000). "Unranked" standing -> rank None. Checked on
+    the second account's screenshots ([w4r]Daddy; account switching comes later).
+48. `arena`: no green opponent and the free refreshes are used up (or the refresh costs gems) -> attack the
+    lowest-powered red opponent instead of stopping (user's rule).
+49. `alliance_tech_contribution`: after the attempts are used up, all of them are back exactly 250 min later (user's
+    rule), so the job just returns 250 min; it no longer reads the "New Contribution attempt in" countdown (item above
+    with + 240 min is replaced).
+50. Every job now ends where it started (user's rule): before_job notes the view (world map if the bottom-right
+    button says "Town", town if it says "World"); the new runner hook after_job presses Back until the bottom menu
+    shows (closing the job's pages) and taps World/Town if the job switched views. online_rewards closes its side
+    panel itself with the panel's "<" tab (templates/side_tab_close.png): Back there opens "Quit game?".
+51. New job `recruit_heroes` (`jobs/recruit_heroes.py`, disabled until done): navigation built and tested — Heroes
+    (bottom menu) -> "Recruit Heroes" (bottom right) -> Hero Recruitment (Advanced: "Daily free recruitments: N",
+    green "Recruit x1 Free" / Recruit x10 with keys; Epic: "Next free: 1d 08:06:24", Recruit x1 / x10 with keys).
+    Back-out: 2 Backs to the town, ~10 s.
+52. `recruit_heroes` complete and **live**: for Advanced and Epic, tap the green "Recruit x1 / Free" only (colour
+    check, hue 35-85; every orange button costs keys and is never tapped), tap "Tap anywhere to exit" on the Rewards
+    screen until it closes (taps during the chest animation are ignored; never the orange "Recruit x1" above it), then
+    read "Next free: ..." of both and come back at the sooner one. Advanced: 5 free a day, 5 min apart; after the 5th
+    its timer runs to the daily reset (00:00 UTC). Epic: one free every ~2 days ("1d 07:59:52"). OCR fixes: Epic timer
+    region kept tight (the hero art above broke it), only a reading with a whole h:mm:ss counts (re-read up to 3x),
+    core/timeparse reads "Id"/"ld" as "1d".
 
 Where to see the next run time: `run.py --timeline` (or `--list`, `state.json` next_at, and the log's "next ..." line).
 

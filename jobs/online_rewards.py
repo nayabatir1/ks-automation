@@ -9,7 +9,15 @@ from datetime import timedelta
 from core.phone import ElementNotFound
 from core.schedule import utcnow
 from core.task import job
-from regions import BLANK_SPOT, CHEST_TIMER, LEFT_MID, NAV_REGION, Q4, SIDE_PANEL
+from regions import (
+    BLANK_SPOT,
+    CHEST_TIMER,
+    LEFT_MID,
+    NAV_REGION,
+    PANEL_TAB,
+    Q4,
+    SIDE_PANEL,
+)
 
 NO_REWARD_RETRY = timedelta(minutes=30)
 
@@ -22,6 +30,12 @@ def no_reward_yet(app, log):
         return known
     log.info("no online reward ready yet; checking again in %s", NO_REWARD_RETRY)
     return NO_REWARD_RETRY
+
+
+def close_panel(phone):
+    """Close the side panel with its "<" tab (Back there would open the game's quit prompt)."""
+    phone.tap(image="side_tab_close", region=PANEL_TAB, timeout=5)
+    phone.wait_gone(text="Wilderness", region=SIDE_PANEL, timeout=5)
 
 
 @job()
@@ -58,6 +72,7 @@ def online_rewards(app, phone, log):
     above_water = (SIDE_PANEL[0], SIDE_PANEL[1], SIDE_PANEL[2], water.y / phone.height)
     m = phone.find(text="Online Rewards", region=above_water)
     if not m:
+        close_panel(phone)
         return no_reward_yet(app, log)
     log.info("found Online Rewards at %s", m.center)
 
@@ -73,4 +88,5 @@ def online_rewards(app, phone, log):
     log.info("next chest in %s", wait)
     phone.tap_xy(*BLANK_SPOT)
     phone.wait_gone(text="Next Chest Ready", region=CHEST_TIMER, timeout=10)
+    close_panel(phone)
     return wait + timedelta(seconds=10)      # a little after it's ready
