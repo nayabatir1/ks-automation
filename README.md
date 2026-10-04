@@ -10,6 +10,8 @@ game.py           Kingshot: launch/loading/pop-ups (on_open, before_job) + share
 regions.py        screen areas shared by all jobs (Q1-Q4, LEFT_MID, NAV_REGION, ...)
 jobs/             one file per job (online_rewards.py, ...); files starting with _ are ignored
 templates/        icon images for image= (made with tools.py crop / tools.py template)
+screens/          screen maps: town.json (+ panorama, labelled image) — names and positions; see Town layout
+tools_map/        scripts that build screen maps from screen recordings
 run.py            runner: picks due jobs, wakes phone, opens game, runs jobs, closes game, sleeps phone
 tools.py          terminal helpers for building jobs (ocr, find, crop, template, tap, ...)
 config.py         settings; secrets/overrides go in .env (see .env.example)
@@ -26,8 +28,8 @@ Phone: Samsung Galaxy M30s (SM-M307F, Android 11, 1080x2340), serial `RZ8M920GS2
 
 - Done: `install.sh` has been run (Tesseract 5.5, `adb-server.service` and `android-cron.timer` are enabled, NTP is on).
   The runner, OCR, taps, and the start of every session (open game, close pop-ups) work on the phone.
-- **Live jobs:** `online_rewards`, `alliance_tech_contribution` (every ~4 h, when all 25 attempts are back) and
-  `conquest` (every 9 h).
+- **Live jobs:** `online_rewards`, `alliance_tech_contribution` (every ~4 h, when all 25 attempts are back),
+  `conquest` (every 9 h) and `arena` (daily 23:53 UTC).
   The timer runs `online_rewards` on its own (World -> side panel -> Online Rewards ->
   the chest is claimed by opening it -> read countdown -> close the game -> phone to sleep), about 60 s per run.
 
@@ -153,11 +155,78 @@ Progress log, 2026-10-03:
     closes the game. Grey Claim = nothing yet: keep the known time, or 9 h.
 35. OCR fix: the white-text pass discarded letters taller than 12% of the area being read, so big button labels
     in small regions vanished ("Claim" in the Idle Income box, "Your Rankin(g)"). The limit is now a fixed 150 px.
+36. Screen maps, starting with the town: `screens/town.json` lists 48 buildings with their positions on
+    `screens/town_panorama.jpg` (6955x5830, stitched from a 1080x2340 screen recording; `town_labelled.jpg` shows the
+    names). Built with `tools_map/town_video.py VIDEO OUT` (tracks the view, stitches, reads the floating name labels)
+    and `tools_map/town_clean.py OUT` (snaps readings to known names, merges repeats). Two tower numbers were checked by
+    eye. The bot's own survey (panning the phone) was dropped: the town's edges are diagonal cliffs/water, and
+    World -> Town doesn't re-centre the view.
+37. New job `arena` (`jobs/arena.py`, disabled until done): daily at 23:53 UTC (`@job(schedule=At("23:53", tz="UTC"))`).
+    Fixed-schedule jobs that never ran now wait for their first slot instead of running straight away
+    (`run.first_run`); jobs without a schedule are still due immediately.
+38. Town map v2, made from the bot phone itself: the user panned the town while the bot recorded its screen
+    (`screenrecord`, 3 segments, 8 min). `tools_map/town_video.py` now takes several segments as one recording. 48
+    buildings including Defense Tower 4, in fresh-launch screen coordinates. Map builds run detached (`setsid nohup`) and at low CPU priority, because a build at
+    normal priority slowed a live job enough to fail it.
+39. Clean-up: removed the town recordings and build working files (temp/), the first video-based map, the unused
+    daytime Arena template, the failed automatic survey script and the bad arena route. Kept: `screens/town.json` +
+    images and the two map-building scripts (to rebuild from a new recording if the town changes).
+40. `town.py`: `go_to_building(phone, log, name)` navigates the town by building names (a "look" = a slow 150 px drag with
+    OCR during it; each name read fixes the view position on `screens/town.json`; drag towards the target; repeat). It
+    only returns a tap point when the label is well inside the screen (`SAFE`), otherwise it centres the building first.
+    `arena` step 1: town view -> go_to_building("Arena") -> tap -> "Arena of Glory" (ranking, season timer, Challenge
+    with an attempts badge, History, Def. Lineup). First run: 7 looks / 85 s, and every 2nd look read no names (to tune).
+41. Faster town navigation (`town.go_to_building`): after a fresh launch the view is known (Town Center centred, view
+    (0, 0), `Kingshot.town_view`), so it drags straight to the building using the map, then checks the building's
+    picture (`templates/town_<name>.png`) with outline matching (`vision.find_shape`), which works day or night. Name
+    looks only when the picture isn't where expected or the position is unknown. Drags use the icon-free middle band
+    of the screen (up to ~1 screen each). Arena: 85 s / 7 looks -> 9 s / 1 check. Don't switch the phone to grayscale:
+    the colour safety checks (teal Contribute, green Claim) need colour.
+42. `arena` step 3: read your standing from your own row above Challenge (`ARENA_MY_ROW`, fixed position):
+    left-most number = rank, right-most = Arena Points; name/power/stars are ignored, so changing values don't matter.
+    Live: rank #433, 1,175 points.
+43. `arena` step 4: tap Challenge (`ARENA_CHALLENGE`) -> "Challenge List": My Power, 5 opponents (power green = lower
+    than yours / red = higher, points, server, a teal swords button each), "Daily challenges: N" with a "+" (probably
+    buys attempts: never tapped) and a green "Free Refresh".
+44. `arena` step 5, choosing an opponent (user's rules): read "Daily challenges: N" (0 = stop; the "+" beside it buys
+    attempts with gems and is never tapped); attack the first opponent whose power is green (= lower than mine; the
+    colour is reliable, the coloured numbers aren't); if none, Free Refresh, but only if the button says "Free" and is
+    green (a gem price = stop), at most 3 per run. The swords button is only tapped after a teal check. For now
+    `ATTACK = False`: it logs which opponent it would attack. Live check: 4 attempts, row 1 (15.9M) chosen.
+45. `arena` is complete and **live** (daily 23:53 UTC): navigate to the Arena (2 s when the game is open on the town),
+    read rank/points, open the Challenge List, then until "Daily challenges" is 0: attack the lowest-powered green
+    opponent (whole-digit power), Squad Settings -> Fight -> pause (`templates/battle_pause.png`, re-tapped until
+    the menu shows: a tap right at the start is ignored) -> Retreat (ends the fight at once; counts as a loss: the user's
+    choice) -> tap anywhere to exit. No weaker opponent -> Free Refresh only if free; gems never. Real run: 2 fights,
+    attempts 2 -> 0, 49 s. (A fight left alone against a weaker opponent was a Victory, 1,186 -> 1,193 points.)
+46. `arena` step 6: when the attempts are used up the job leaves the arena itself (2 Backs: Challenge List -> Arena ->
+    town, ~2 s instead of ~25 s for the generic back-out), so the runner can go straight on to the next due job or close
+    the game.
 
 Where to see the next run time: `run.py --timeline` (or `--list`, `state.json` next_at, and the log's "next ..." line).
 
 Next: the next job. Take care when tapping in Kingshot: the start-up pop-ups have purchase
 buttons, and the chat screen has a SEND button.
+
+## Town layout (quick reference)
+
+Rough grid of the town; north (the river) at the top. `screens/town.json` has exact positions: screen pixels as seen
+right after a **fresh launch** (Town Center centred at about (480, 1145)), extended over the town. So the Arena at
+(2978, 2005) is about 2.5 screen-widths right of the Town Center and 0.4 screen-heights down.
+`screens/town_labelled.jpg` shows the names on the stitched town. DT = Defense Tower. DT 1 has no number in the game (the devs left it off).
+
+| x≈-396 | x≈409 | x≈1215 | x≈2020 | x≈2826 | x≈3632 |
+|---|---|---|---|---|---|
+| Clinic, Mill | House 2, Sawmill | Quarry | DT 4, Iron Mine | · | · |
+| House 4, House 8, Kitchen | Town Center | DT 2, House 1 | · | · | · |
+| House 3, House 6, House 7 | DT 1, Suggestion Box | Alarm Bell, Barricade 1, Hero Hall | Watchtower | Stable | · |
+| DT 3, House 5 | · | Conquerors Camp | Barracks, Monument | Arena, Range | DT 6, Dock, Embassy |
+| · | Court of Justice | Enlistment Office, Infirmary | Academy | Guard Station | DT 8 |
+| · | · | DT 5, Storehouse | Beast Cage, Command Center | · | Truegold Crucible |
+| · | · | Master Academy | DT 7 | War Academy | Barricade 2 |
+
+Names only show while the town view is being dragged (a slow 150 px drag over 4 s shows them; a gentle nudge via adb
+doesn't). They look the same day or night, unlike the buildings, so navigation goes by names.
 
 ## Setup
 

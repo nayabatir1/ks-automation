@@ -42,7 +42,7 @@ class Match:
     def __str__(self):
         cx, cy = self.center
         x1, y1, x2, y2 = self.box
-        sc = f"{self.score:.0f}" if self.source != "image" else f"{self.score:.2f}"
+        sc = f"{self.score:.2f}" if self.source in ("image", "shape") else f"{self.score:.0f}"
         return f"tap ({cx:4d},{cy:4d})  box {x1},{y1}-{x2},{y2}  score {sc:>4}  [{self.source}]  {self.text}"
 
 
@@ -258,6 +258,29 @@ def find_image(img, image, region=None, threshold=None, scales=(1.0,)):
     if best is None or best.score < (threshold or config.MATCH_THRESHOLD):
         return None
     return best
+
+
+_CLAHE = cv2.createCLAHE(2.0, (8, 8))
+
+
+def _outline(img):
+    g = _CLAHE.apply(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
+    return cv2.GaussianBlur(cv2.Canny(g, 40, 120), (7, 7), 0)
+
+
+def find_shape(img, image, region=None, threshold=0.5):
+    """Like find_image, but compares outlines (edges) instead of colours/brightness, so a template cut in daylight
+    still matches at night. Scores run lower than find_image (~0.95 same lighting, ~0.75 day vs night, < 0.25 for
+    other things), hence the lower threshold."""
+    tmpl, name = load_template(image)
+    part, (ox, oy) = crop(img, region)
+    th, tw = tmpl.shape[:2]
+    if part.shape[0] < th or part.shape[1] < tw:
+        return None
+    _, score, _, (x, y) = cv2.minMaxLoc(cv2.matchTemplate(_outline(part), _outline(tmpl), cv2.TM_CCOEFF_NORMED))
+    if score < threshold:
+        return None
+    return Match(x + ox, y + oy, tw, th, float(score), name, "shape")
 
 
 def median_hue(img, region):

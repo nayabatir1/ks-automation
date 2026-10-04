@@ -200,12 +200,19 @@ def run_simple(phone, name, task, state):
 
 
 # ------------------------------------------------------------------ @job tasks
+def first_run(j, now):
+    """When a job that never ran is first due: straight away, or its first slot if it has a fixed schedule."""
+    if j.schedule and not j.schedule.is_due(now, None):
+        return j.schedule.next_slot(now)
+    return datetime.min.replace(tzinfo=timezone.utc)
+
+
 def due_jobs(name, task, state, now, ahead=timedelta(0)):
-    """Enabled jobs whose next_at has come (never run = due), in run order."""
-    never = datetime.min.replace(tzinfo=timezone.utc)
-    out = [j for j in task.job_list()
-           if j.enabled and (state.next_at(f"{name}.{j.name}") or never) <= now + ahead]
-    return sorted(out, key=lambda j: (j.priority, state.next_at(f"{name}.{j.name}") or never))
+    """Enabled jobs whose next_at has come, in run order. Never run = due now, or at its first scheduled slot."""
+    def when(j):
+        return state.next_at(f"{name}.{j.name}") or first_run(j, now)
+    out = [j for j in task.job_list() if j.enabled and when(j) <= now + ahead]
+    return sorted(out, key=lambda j: (j.priority, when(j)))
 
 
 def next_time(job, result):
@@ -342,8 +349,8 @@ def _status(entry):
 
 
 def job_next(name, j, state, now):
-    """Next run of a job for display: its next_at, or 'now' if it never ran."""
-    return state.next_at(f"{name}.{j.name}") or now
+    """Next run of a job for display: its next_at, or (never ran) now / its first scheduled slot."""
+    return state.next_at(f"{name}.{j.name}") or max(now, first_run(j, now))
 
 
 def print_list(tasks, state, now):

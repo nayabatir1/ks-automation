@@ -1,0 +1,247 @@
+{
+ "screen": "town (city view)",
+ "source": "bot phone screen recording (temp/rec/town_rec_1-3.mp4), panned by the user from a fresh launch",
+ "coordinates": "screen pixels as seen right after a FRESH LAUNCH (Town Center centred), extended over the whole town: a building at (x, y) is on screen at (x - vx, y - vy) after the view has moved (vx, vy). x, y = the building's name label; the building itself is just below it.",
+ "buildings": [
+  {
+   "name": "Sawmill",
+   "x": 535,
+   "y": 66
+  },
+  {
+   "name": "Mill",
+   "x": -134,
+   "y": 233
+  },
+  {
+   "name": "Quarry",
+   "x": 1254,
+   "y": 274
+  },
+  {
+   "name": "Defense Tower 4",
+   "x": 2186,
+   "y": 403
+  },
+  {
+   "name": "House 2",
+   "x": 550,
+   "y": 592
+  },
+  {
+   "name": "Clinic",
+   "x": -766,
+   "y": 628
+  },
+  {
+   "name": "Iron Mine",
+   "x": 1668,
+   "y": 663
+  },
+  {
+   "name": "Kitchen",
+   "x": -40,
+   "y": 684
+  },
+  {
+   "name": "House 1",
+   "x": 931,
+   "y": 740
+  },
+  {
+   "name": "House 8",
+   "x": -799,
+   "y": 1106
+  },
+  {
+   "name": "Town Center",
+   "x": 480,
+   "y": 1145
+  },
+  {
+   "name": "House 4",
+   "x": -214,
+   "y": 1166
+  },
+  {
+   "name": "Defense Tower 2",
+   "x": 1227,
+   "y": 1210
+  },
+  {
+   "name": "Watchtower",
+   "x": 2004,
+   "y": 1333
+  },
+  {
+   "name": "Alarm Bell",
+   "x": 869,
+   "y": 1354
+  },
+  {
+   "name": "House 7",
+   "x": -711,
+   "y": 1468
+  },
+  {
+   "name": "Stable",
+   "x": 2536,
+   "y": 1523
+  },
+  {
+   "name": "Hero Hall",
+   "x": 1499,
+   "y": 1526
+  },
+  {
+   "name": "House 3",
+   "x": -4,
+   "y": 1550
+  },
+  {
+   "name": "Suggestion Box",
+   "x": 615,
+   "y": 1570
+  },
+  {
+   "name": "Barricade 1",
+   "x": 1060,
+   "y": 1668
+  },
+  {
+   "name": "Defense Tower 1",
+   "x": 547,
+   "y": 1761
+  },
+  {
+   "name": "House 6",
+   "x": -487,
+   "y": 1821
+  },
+  {
+   "name": "Barracks",
+   "x": 2020,
+   "y": 1895
+  },
+  {
+   "name": "Defense Tower 6",
+   "x": 3407,
+   "y": 1928
+  },
+  {
+   "name": "House 5",
+   "x": -193,
+   "y": 1982
+  },
+  {
+   "name": "Arena",
+   "x": 2978,
+   "y": 2005
+  },
+  {
+   "name": "Defense Tower 3",
+   "x": -699,
+   "y": 2095
+  },
+  {
+   "name": "Conquerors Camp",
+   "x": 925,
+   "y": 2123
+  },
+  {
+   "name": "Dock",
+   "x": 4034,
+   "y": 2132
+  },
+  {
+   "name": "Range",
+   "x": 2526,
+   "y": 2338
+  },
+  {
+   "name": "Monument",
+   "x": 1904,
+   "y": 2426
+  },
+  {
+   "name": "Embassy",
+   "x": 3335,
+   "y": 2445
+  },
+  {
+   "name": "Infirmary",
+   "x": 1219,
+   "y": 2512
+  },
+  {
+   "name": "Court of Justice",
+   "x": 599,
+   "y": 2588
+  },
+  {
+   "name": "Guard Station",
+   "x": 2929,
+   "y": 2947
+  },
+  {
+   "name": "Defense Tower 8",
+   "x": 3856,
+   "y": 2982
+  },
+  {
+   "name": "Academy",
+   "x": 1917,
+   "y": 2999
+  },
+  {
+   "name": "Enlistment Office",
+   "x": 889,
+   "y": 3014
+  },
+  {
+   "name": "Truegold Crucible",
+   "x": 3353,
+   "y": 3225
+  },
+  {
+   "name": "Storehouse",
+   "x": 1360,
+   "y": 3270
+  },
+  {
+   "name": "Command Center",
+   "x": 2353,
+   "y": 3388
+  },
+  {
+   "name": "Defense Tower 5",
+   "x": 1075,
+   "y": 3537
+  },
+  {
+   "name": "Beast Cage",
+   "x": 1741,
+   "y": 3594
+  },
+  {
+   "name": "Barricade 2",
+   "x": 3355,
+   "y": 3801
+  },
+  {
+   "name": "War Academy",
+   "x": 2613,
+   "y": 3850
+  },
+  {
+   "name": "Defense Tower 7",
+   "x": 2328,
+   "y": 4088
+  },
+  {
+   "name": "Master Academy",
+   "x": 1400,
+   "y": 4247
+  }
+ ]
+}
