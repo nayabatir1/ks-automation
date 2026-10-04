@@ -33,7 +33,10 @@ def no_reward_yet(app, log):
 
 
 def close_panel(phone):
-    """Close the side panel with its "<" tab (Back there would open the game's quit prompt)."""
+    """Close the side panel with its "<" tab (Back there would open the game's quit prompt).
+    Closing the chest screen with a tap outside the panel can close the panel too: then there's nothing to do."""
+    if not phone.exists(text="Wilderness", region=SIDE_PANEL, timeout=1):
+        return
     phone.tap(image="side_tab_close", region=PANEL_TAB, timeout=5)
     phone.wait_gone(text="Wilderness", region=SIDE_PANEL, timeout=5)
 
