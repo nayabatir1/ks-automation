@@ -226,6 +226,46 @@ Progress log, 2026-10-03:
     its timer runs to the daily reset (00:00 UTC). Epic: one free every ~2 days ("1d 07:59:52"). OCR fixes: Epic timer
     region kept tight (the hero art above broke it), only a reading with a whole h:mm:ss counts (re-read up to 3x),
     core/timeparse reads "Id"/"ld" as "1d".
+53. New job `dailies` (`jobs/dailies.py`, disabled until done). Part 1, gems / Top-up Center (real-money shop:
+    never tap ₹ or TOP UP): tap the cart picture (templates/gems_shop.png; the gem count changes) -> "Top-up
+    Center". Tabs (names and pictures change) sit in a swipeable row; a red dot on a tab = a free chest in its header.
+    For each dotted tab: tap it, tap the free chest — found by its own red dot ("Claimable") or, failing that, a white
+    "Claimable"/"Free" label (Daily Deals: no dot, label "Free", then a "Claimed" pop-up with "Tap anywhere to exit")
+    — then swipe the row on until it stops moving. vision.red_dots() finds the notification dots (round ~20 px blobs;
+    red icons/ribbons/"!" badges don't count). Hand test: Master's Collection, Hope Market, Custom Forging Set and Daily
+    Deals gave +100/+100/+150/+100 gems.
+    Part 2, VIP (orange V badge, templates/vip_badge.png; the level number changes) -> "VIP" screen: the daily
+    sign-in VIP XP chest under Shop (red dot; +500 XP, "Rewards" pop-up) and the green Claim of "VIP N Daily Free
+    Bundle"; both reset at 00:00 UTC. Never: the "+" by the XP bar, Shop, the ₹ "VIP N Special Pack" (it has a red
+    dot too). Reward pop-ups ("Click to continue" / "Tap anywhere to exit") ignore taps during their animation:
+    dismiss_popup() taps the dim area above them until they're gone.
+    Part 3, Deals (gift icon): only two tabs give free things — "Sign-in & Earn It" (one Free reward per day) and
+    "Hero Rally" (Free rewards unlock as tasks earn points). open_tab() finds a tab by name (the open tab shows no
+    name, so its big title is checked first; short swipes so no tab is read cut off at the edge); claim_glowing()
+    taps Free-column items with a pale glowing frame (a 100-175 px pale line on top and another 110-160 px below).
+    Never: Epic / Path of Honor column, Unlock, Purchase Level, "+", ₹. Hand test: Sign-in Day 1 = 100 gems.
+    Whole job ~95 s when nothing is left to claim.
+54. `dailies` is split into parts (PARTS = gems, vip, deals, ... in jobs/dailies.py), each starting and ending on the
+    city / world map. Test one part: `run.py --job dailies --part vip` (several: `--part gems,deals`; leave `--part`
+    out to test them all together). A `--job` run now also works while the bot is paused by hand (`--pause`); the
+    pause still stops timer runs, and the auto-pause after a "logged in on another device" still stops everything.
+55. `dailies` part `nomadic_merchant`: Shop (bottom menu) -> Nomadic Merchant tab. Buy any of the 6 boxes priced in
+    bread/wood/stone/iron (a bought box is restocked at once, no confirm), one at a time with a fresh screenshot,
+    until all 6 are priced in gems (blue diamond in the price bar); then Free Refresh (only while it says Free and is
+    green) and again. Never a gem price. One stock took ~80 buys (~4 s each), so the job timeout is now 900 s.
+    Live run: 21 buys + 1 free refresh, gems unchanged (32,870).
+56. `arena` is now made of parts (core/task.run_parts, shared with dailies): `intel_mission` then `arena`.
+    intel_mission: world map -> compass button (Q4 right, templates/compass_button.png) -> "Intel Mission" -> tap
+    the hero portrait at the top left when it's there (templates/intel_hero.png; brings new mission pins) -> Back ->
+    Town. Switching World -> Town shows the town where it was left (NOT re-centred), and intel_mission doesn't move
+    it, so the arena part still knows where it is after a fresh launch. Test: `run.py --job arena --part
+    intel_mission`.
+57. `dailies` now runs daily at 00:10 UTC (still disabled until all parts are done). New part `cassie_recruit`: on
+    the town, go_to_building Stable -> Barracks -> Range -> Enlistment Office (new outline templates
+    town_stable/barracks/range/enlistment_office.png, cut by hand while the user panned) and tap every bubble with
+    Cassie's picture (templates/cassie_bubble.png, matched at several sizes: bubbles are drawn smaller near the town
+    edge). The tap is instant, no pop-up; one tap turned the other buildings' Cassie bubbles into other heroes
+    (knight / helmet / archer bubbles are not tapped). The view is carried from building to building (~5 s each).
 
 Where to see the next run time: `run.py --timeline` (or `--list`, `state.json` next_at, and the log's "next ..." line).
 

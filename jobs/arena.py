@@ -1,9 +1,11 @@
-"""Kingshot job: arena. Daily at 23:53 UTC.
+"""Kingshot job: arena. Daily at 23:53 UTC. Parts: intel_mission, then arena.
+Test one part: run.py --job arena --part intel_mission
 
 Starts on the city screen or world map (bottom menu visible, no pop-up) — game.py's on_open/before_job
-open the game and close all pop-ups first.
+open the game and close all pop-ups first; after_job backs out to where it started.
 """
 import re
+import time
 
 import cv2
 import numpy as np
@@ -11,25 +13,52 @@ import pytesseract
 
 from core import vision
 from core.schedule import At
-from core.task import job
+from core.task import job, run_parts
 from regions import (
     ARENA_CHALLENGE,
     ARENA_MY_ROW,
+    COMPASS_BUTTON,
     DAILY_CHALLENGES,
     FREE_REFRESH,
+    INTEL_HERO,
     NAV_REGION,
+    SCREEN_TITLE,
 )
 from town import go_to_building
 
 
 @job(schedule=At("23:53", tz="UTC"))
 def arena(app, phone, log):
+    run_parts(app, phone, log, {"intel_mission": intel_mission, "arena": fight_arena})
+
+
+def intel_mission(app, phone, log):
+    """World map -> compass button (Q4, right) -> Intel Mission: tap the hero portrait (top left) when it's there,
+    which brings new missions. Then close Intel Mission and go to the town view."""
+    if phone.exists(text="World", region=NAV_REGION):            # on the town: the button names the world map
+        phone.tap(text="World", region=NAV_REGION)
+        phone.wait_for(text="Town", region=NAV_REGION, timeout=15)
+    app.tap_on_main(phone, log, image="compass_button", region=COMPASS_BUTTON)
+    phone.wait_for(text="Intel Mission", region=SCREEN_TITLE, timeout=10)
+    log.info("intel mission open")
+    if phone.exists(image="intel_hero", region=INTEL_HERO):
+        phone.tap(image="intel_hero", region=INTEL_HERO)
+        log.info("intel mission: tapped the hero")
+        time.sleep(1.5)
+    else:
+        log.info("intel mission: no hero to tap")
+    phone.back()
+    phone.wait_for(text="Town", region=NAV_REGION, timeout=10)
+    phone.tap(text="Town", region=NAV_REGION)
+    phone.wait_for(text="World", region=NAV_REGION, timeout=15)   # the town is shown where it was left
+
+
+def fight_arena(app, phone, log):
     # 1. town view (if the world map is showing, its bottom-right button says "Town")
     view = app.town_view                         # (0, 0) right after a fresh launch: no need to look first
     if phone.exists(text="Town", region=NAV_REGION):
         phone.tap(text="Town", region=NAV_REGION)
-        phone.wait_for(text="World", region=NAV_REGION, timeout=15)
-        view = None
+        phone.wait_for(text="World", region=NAV_REGION, timeout=15)   # the town is shown where it was left
 
     # 2. find the Arena by the building names and tap it
     x, y = go_to_building(phone, log, "Arena", view=view)

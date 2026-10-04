@@ -39,3 +39,25 @@ ADVANCED_TIMER = (0.05, 0.675, 0.5, 0.698)      # Hero Recruitment, Advanced: "N
 ADVANCED_X1 = (0.05, 0.70, 0.47, 0.75)          # ...its left button: green "Recruit x1 / Free", else orange (keys: never)
 EPIC_TIMER = (0.08, 0.908, 0.45, 0.925)         # Epic: "Next free: 1d 07:59:52"
 EPIC_X1 = (0.05, 0.927, 0.47, 0.975)            # ...its left button, same as Advanced
+GEMS_SHOP = (0.75, 0.03, 1, 0.1)                # Q1 top: cart + gems button (the count changes; matched by the cart picture)
+TOPUP_TITLE = (0.1, 0.04, 0.6, 0.09)            # "Top-up Center" (real-money shop: never tap a ₹ price / TOP UP)
+SHOP_TAB_DOTS = (0, 0.1, 1, 0.13)               # Top-up Center tab row: red dot at each tab's top right = something free
+SHOP_TAB_ROW_Y = 330                            # y to tap / swipe the tab row (icons + names, above the content)
+SHOP_FREE_AREA = (0, 0.14, 1, 0.35)             # content header: the free chest ("Claimable" / "Free"), above any ₹ button
+VIP_BADGE = (0.75, 0.07, 1, 0.12)               # Q1: orange V badge before "VIP 9" (the number changes; templates/vip_badge.png)
+VIP_TITLE = (0.1, 0.04, 0.4, 0.09)              # VIP screen title "VIP"
+VIP_XP_CHEST = (0.65, 0.17, 1, 0.24)            # VIP screen: daily sign-in VIP XP chest (under Shop); red dot = claimable
+VIP_BUNDLE_CLAIM = (0.6, 0.66, 0.95, 0.74)      # VIP screen: "VIP N Daily Free Bundle" green Claim (Special Pack below = ₹: never)
+POPUP_CONTINUE = (0.1, 0.9, 0.9, 0.97)          # reward pop-ups: "Click to continue" / "Tap anywhere to exit"
+DEALS_LABEL = (0.85, 0.2, 1, 0.25)              # Q1: "Deals" under its gift icon
+SCREEN_TITLE = (0.1, 0.04, 0.6, 0.09)           # title next to the back arrow ("VIP", "Deals", ...)
+TAB_NAMES = (0, 0.12, 1, 0.17)                  # Top-up Center / Deals: tab names under the tab pictures
+FREE_COLUMN = (40, 880, 420, 2300)              # Deals > Sign-in & Earn It / Hero Rally: the "Free" column (pixels)
+TAB_TITLE = (0, 0.175, 0.7, 0.22)              # Top-up Center / Deals: big title of the open tab (its tab shows no name)
+SHOP_NAV = (0.5, 0.95, 0.65, 1)                 # bottom menu: "Shop"
+SHOP_BOTTOM_TABS = (0, 0.93, 1, 1)              # Shop: bottom tabs Nomadic Merchant / Mystery / Arena / VIP...
+MERCHANT_TIMER = (0.6, 0.14, 1, 0.2)            # Nomadic Merchant: "Refreshes in: 03:42:39"
+MERCHANT_REFRESH = (0.6, 0.19, 1, 0.24)         # ...green "Free Refresh" (costs gems once the free ones are used: never)
+MERCHANT_PRICES = [(x, y) for y in (1095, 1529) for x in (192, 540, 888)]   # centres of the 6 price bars (pixels)
+COMPASS_BUTTON = (0.75, 0.65, 1, 0.8)           # world map, Q4 right: compass button -> Intel Mission
+INTEL_HERO = (0, 0.12, 0.3, 0.26)               # Intel Mission: hero portrait (top left) while there's one to tap

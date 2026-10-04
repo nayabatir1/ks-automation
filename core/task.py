@@ -64,6 +64,8 @@ class Task:
     enabled: bool = True
     # Force-stop the app after the task (also after a failure).
     close_app: bool = True
+    # run.py --part: only these parts of a job made of parts (e.g. jobs/dailies.py); None = all of them.
+    parts: list | None = None
     # If the app is already in the foreground, keep using it instead of restarting it.
     # The runner sets self.app_was_open before on_open() so it can skip the loading screens.
     reuse_open_app: bool = False
@@ -159,3 +161,15 @@ class Task:
                         raise RuntimeError(f"{cls.__name__}: job '{name}' is defined twice")
                     found[name] = fn
         return found
+
+
+def run_parts(app, phone, log, parts):
+    """Run a job made of parts ({name: function(app, phone, log)}) in order, or only the ones picked with
+    run.py --part (app.parts)."""
+    unknown = set(app.parts or ()) - set(parts)
+    if unknown:
+        raise ValueError(f"no part {', '.join(sorted(unknown))}; parts: {', '.join(parts)}")
+    for name, part in parts.items():
+        if app.parts is None or name in app.parts:
+            log.info("part: %s", name)
+            part(app, phone, log)

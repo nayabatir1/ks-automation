@@ -299,6 +299,19 @@ def coloured_share(img, region):
     return float((cv2.cvtColor(part, cv2.COLOR_BGR2HSV)[:, :, 1] > 80).mean())
 
 
+def red_dots(img, region=None):
+    """Centres (x, y) of the small bright-red notification dots in an area, top to bottom, left to right.
+    Round blobs of ~20 px only, so red icons, ribbons and "!" badges don't count."""
+    part, (ox, oy) = crop(img, region)
+    hsv = cv2.cvtColor(part, cv2.COLOR_BGR2HSV)
+    red = ((hsv[:, :, 0] < 8) | (hsv[:, :, 0] > 172)) & (hsv[:, :, 1] > 170) & (hsv[:, :, 2] > 200)
+    n, _, stats, centres = cv2.connectedComponentsWithStats(red.astype(np.uint8))
+    dots = [(ox + int(centres[k][0]), oy + int(centres[k][1])) for k in range(1, n)
+            if 250 < stats[k][4] < 1500 and 0.7 < stats[k][2] / stats[k][3] < 1.4
+            and stats[k][4] > 0.6 * stats[k][2] * stats[k][3]]
+    return sorted(dots, key=lambda d: (d[1] // 30, d[0]))
+
+
 def screen_diff(a, b, region=None):
     """Mean pixel difference (0-255) between two screenshots, on a small greyscale version."""
     def small(im):

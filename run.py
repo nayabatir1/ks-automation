@@ -231,6 +231,10 @@ def next_time(job, result):
     return now + timedelta(minutes=job.retry_minutes)
 
 
+HAND_PAUSE = "paused by hand"
+_hand_run = False           # a --job run while paused by hand: the pause doesn't stop it (it still stops timer runs)
+
+
 def run_jobs(phone, name, task, state, jobs, wait=True):
     """One app session: open the app and run the due jobs. If the next job (any job) is due within
     session_wait_seconds, keep the app open and run it too; otherwise close the app (max_session_minutes cap)."""
@@ -269,7 +273,8 @@ def run_batch(phone, name, task, state, jobs, tlog):
     """Run these jobs one after another. Returns (all ok, app could not be recovered)."""
     ok = True
     for i, j in enumerate(jobs):
-        if pause.get():
+        paused = pause.get()
+        if paused and not (_hand_run and paused["reason"] == HAND_PAUSE):
             log.info("=== %s: paused; stopping this session", name)
             return ok, True
         key = f"{name}.{j.name}"
@@ -408,7 +413,7 @@ def set_pause(args):
     if not duration:
         log.error("Can't read duration %r; use e.g. 2h, 90m, 1h30m", args.pause)
         return 2
-    until = pause.pause_for(duration, "paused by hand")
+    until = pause.pause_for(duration, HAND_PAUSE)
     log.info("Paused until %s; `run.py --resume` to end it sooner", _fmt_both(until))
     return 0
 
@@ -417,6 +422,7 @@ def main():
     ap = argparse.ArgumentParser(description="Android task runner")
     ap.add_argument("--task", help="run this task now, ignoring schedule")
     ap.add_argument("--job", help="run only this job now")
+    ap.add_argument("--part", help="with --job: run only these parts of the job, e.g. vip,deals (testing)")
     ap.add_argument("--list", action="store_true", help="list jobs and exit")
     ap.add_argument("--timeline", action="store_true", help="show what runs next, in order")
     ap.add_argument("--dry-run", action="store_true", help="show what is due, don't run")
@@ -434,8 +440,9 @@ def main():
     tasks = load_tasks()
     state = State(config.STATE_FILE)
     now = utcnow()
-    if args.keep_open:
-        for t in tasks.values():
+    for t in tasks.values():
+        t.parts = args.part.split(",") if args.part else None
+        if args.keep_open:
             t.close_app = False
 
     paused = pause.get()
@@ -448,6 +455,10 @@ def main():
         if args.timeline:
             print_timeline(tasks, state, now)
             return 0
+    elif paused and args.job and paused["reason"] == HAND_PAUSE:
+        log.info("Paused by hand; running --job %s anyway (you asked for it)", args.job)
+        global _hand_run
+        _hand_run = True
     elif paused:
         if args.task or args.job:
             log.error("Paused until %s (%s). Run `run.py --resume` first.", _fmt_both(paused["until"]),
