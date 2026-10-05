@@ -1,4 +1,4 @@
-"""Kingshot job: dailies. Daily at 00:10 UTC.
+"""Kingshot job: dailies. Daily at 00:30 UTC (6am IST), after troops_training.
 
 Starts on the city screen or world map (bottom menu visible, no pop-up) — game.py's on_open/before_job
 open the game and close all pop-ups first; after_job backs out to where it started.
@@ -53,7 +53,7 @@ PRICE_ROWS = (0, 0.45, 1, 0.67)  # merchant: the rows with the 6 price bars
 BLANK_SPOT_PX = (540, 300)      # dim area above reward pop-ups (no buttons behind it take the tap)
 
 
-@job(schedule=At("00:10", tz="UTC"), timeout=1800)   # the merchant alone can take ~12 min
+@job(schedule=At("00:30", tz="UTC"), priority=100, timeout=1800)   # 6am IST, after troops_training; merchant ~12 min
 def dailies(app, phone, log):
     """The parts below, in order; each starts and ends on the city / world map.
     Test one part: run.py --job dailies --part vip   (several: --part gems,deals; all: leave --part out)"""

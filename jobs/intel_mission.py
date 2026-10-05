@@ -1,4 +1,4 @@
-"""Kingshot job: intel mission. Daily at 00:10 UTC (right after dailies, same session) and 10:00 UTC.
+"""Kingshot job: intel mission. 00:30 + 11:30 UTC (6am + 5pm IST), last job of those sessions.
 
 World map -> compass -> Intel Mission. A finished pin (green tick) is tapped to claim its reward (it disappears);
 every open pin is done (new missions can appear, so it goes round until none are left):
@@ -44,7 +44,7 @@ BLANK = (540, 300)       # dim area above pop-ups
 DEPLOY_TAP = (822, 2210)  # centre of the Deploy button
 
 
-@job(schedule=At("00:10", "10:00", tz="UTC"), priority=110, timeout=1200)   # 110: after dailies (100)
+@job(schedule=At("00:30", "11:30", tz="UTC"), priority=110, timeout=1200)   # 6am + 5pm IST, last
 def intel_mission(app, phone, log):
     if phone.exists(text="World", region=NAV_REGION):            # on the town: the button names the world map
         phone.tap(text="World", region=NAV_REGION)

@@ -42,6 +42,10 @@ class State:
         }
         if next_at is not None:
             entry["next_at"] = next_at.astimezone(timezone.utc).isoformat(timespec="seconds")
+        try:                       # re-read first: other jobs' entries may have changed (a hand edit, another run)
+            self.data = json.loads(self.path.read_text())
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
         self.data[name] = entry
         self.save()
 
