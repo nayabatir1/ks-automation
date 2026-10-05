@@ -103,7 +103,7 @@ class Kingshot(Task):
         except ElementNotFound:
             log.info("no loading bar seen (fast start?)")
         phone.wait_gone(text=LOADING, region=LOADING_REGION, timeout=120)
-        phone.wait_stable(timeout=60, still_for=2)
+        phone.wait_stable(region=NAV_REGION, timeout=60, still_for=2)   # bottom menu: event banners animate
         log.info("game loaded after %.0fs", time.monotonic() - t0)
 
     @staticmethod

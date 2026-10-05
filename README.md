@@ -326,6 +326,32 @@ sudo journalctl -u android-cron.service -n 50  # timer runs (no sudo needed if y
 tail -f logs/runner.log
 ```
 
+## Turning the automation off / on
+
+The bot is started every minute by the systemd timer `android-cron.timer`.
+
+Turn it off permanently (also after a reboot; a job that is running finishes, nothing new starts):
+
+    sudo systemctl disable --now android-cron.timer
+
+Also stop the adb server (optional; it only keeps the USB link to the phone open):
+
+    sudo systemctl disable --now adb-server.service
+
+Check that it's off:
+
+    systemctl list-timers android-cron.timer --no-pager
+
+Turn it back on:
+
+    sudo systemctl enable --now android-cron.timer
+    sudo systemctl enable --now adb-server.service   # if you stopped it
+
+Nothing is deleted: code, job schedules (`state.json`) and logs stay in `~/projects/ks`.
+
+Just a break instead: `.venv/bin/python run.py --pause 12h` (any duration), and `.venv/bin/python run.py --resume`
+to end it sooner.
+
 ## Jobs
 
 A session always looks like this; the runner does the wrapping, so a job file contains only its own steps:

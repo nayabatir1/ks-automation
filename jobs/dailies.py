@@ -47,7 +47,7 @@ SEARCH_SWIPE = (800, 450)
 BLANK_SPOT_PX = (540, 300)      # dim area above reward pop-ups (no buttons behind it take the tap)
 
 
-@job(enabled=False, schedule=At("00:10", tz="UTC"), timeout=900)
+@job(schedule=At("00:10", tz="UTC"), timeout=1800)   # the merchant alone can take ~12 min
 def dailies(app, phone, log):
     """The parts below, in order; each starts and ends on the city / world map.
     Test one part: run.py --job dailies --part vip   (several: --part gems,deals; all: leave --part out)"""
