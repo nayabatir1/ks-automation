@@ -44,6 +44,7 @@ MAX_TAB_PAGES = 8
 BUBBLE_SCALES = (0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.1)   # bubbles are drawn smaller near the town edge
 MAX_MERCHANT_ROUNDS = 300      # buys + refreshes per run, so it can never loop (one stock took ~80 buys)
 SEARCH_SWIPE = (800, 450)
+PRICE_ROWS = (0, 0.45, 1, 0.67)  # merchant: the rows with the 6 price bars
 BLANK_SPOT_PX = (540, 300)      # dim area above reward pop-ups (no buttons behind it take the tap)
 
 
@@ -108,27 +109,50 @@ def nomadic_merchant(app, phone, log):
     phone.wait_for(text="Refreshes in", region=MERCHANT_TIMER, timeout=10)
     log.info("nomadic merchant open")
     bought = refreshes = 0
-    for _ in range(MAX_MERCHANT_ROUNDS):
-        box = next((xy for xy in MERCHANT_PRICES if not gem_price(phone.screen(), xy)), None)
-        if box:
-            phone.tap_xy(*box)
-            bought += 1
-            time.sleep(0.8)
-            phone.forget_screen()
-            if not phone.exists(text="Refreshes in", region=MERCHANT_TIMER, timeout=3):
-                log.info("merchant: something opened after buying (not enough resources?); stopping")
+    for round_no in range(MAX_MERCHANT_ROUNDS):
+        # one screenshot of the price bars, all 6 evaluated; then tap each resource-priced one, but re-check that
+        # one bar just before its tap (~0.3 s): a buy restocks and reorders the boxes, so a box can turn into gems
+        phone.forget_screen()
+        img = phone.screen(PRICE_ROWS)
+        boxes = [xy for xy in MERCHANT_PRICES if price_bar(img, xy) and not gem_price(img, xy)]
+        if boxes:
+            for xy in boxes:
+                phone.forget_screen()
+                now = phone.screen(bar_region(xy))
+                if price_bar(now, xy) and not gem_price(now, xy):
+                    phone.tap_xy(*xy)
+                    bought += 1
+                    time.sleep(0.3)
+            if round_no % 5 == 4 and not phone.exists(text="Refreshes in", region=MERCHANT_TIMER, timeout=3):
+                log.info("merchant: the merchant screen is gone (not enough resources?); stopping")
                 phone.back()
                 break
             continue
+        if not all(price_bar(img, xy) for xy in MERCHANT_PRICES):
+            log.info("merchant: price bars not all visible; stopping")
+            break
         m = phone.find(text="Free Refresh", region=MERCHANT_REFRESH)
         if not m or not 35 <= vision.median_hue(phone.last_screen, MERCHANT_REFRESH) <= 85:
             break                                        # all boxes cost gems and the refresh isn't free: done
         phone.tap_xy(*m.center)
         refreshes += 1
         time.sleep(1)
-        phone.forget_screen()
     log.info("merchant: %d box(es) bought, %d free refresh(es)", bought, refreshes)
     back_to_main(phone)
+
+
+def bar_region(xy):
+    """Screen rows of one price bar (for a quick strip screenshot)."""
+    return 0, (xy[1] - 32) / 2340, 1, (xy[1] + 32) / 2340
+
+
+def price_bar(img, xy):
+    """Is a merchant price bar really there (cream background)? Guards against tapping when something covers it."""
+    x, y = xy
+    hsv = cv2.cvtColor(img[y - 30:y + 30, x - 160:x + 160], cv2.COLOR_BGR2HSV)
+    cream = ((hsv[:, :, 0] >= 10) & (hsv[:, :, 0] <= 30) & (hsv[:, :, 1] >= 15) & (hsv[:, :, 1] <= 80)
+             & (hsv[:, :, 2] > 215))
+    return 0.35 <= cream.mean() <= 0.75
 
 
 def gem_price(img, xy):
