@@ -15,9 +15,13 @@ from core import vision
 from core.schedule import At
 from core.task import job, run_parts
 from regions import (
+    CRUCIBLE_REFINE,
+    CRUCIBLE_REMAINING,
+    CRUCIBLE_SUPER_X1,
     DEALS_LABEL,
     FREE_COLUMN,
     GEMS_SHOP,
+    LEFT_MID,
     MERCHANT_PRICES,
     MERCHANT_REFRESH,
     MERCHANT_TIMER,
@@ -29,6 +33,7 @@ from regions import (
     SHOP_NAV,
     SHOP_TAB_DOTS,
     SHOP_TAB_ROW_Y,
+    SIDE_PANEL,
     TAB_NAMES,
     TAB_TITLE,
     TOPUP_TITLE,
@@ -185,8 +190,48 @@ def cassie_recruit(app, phone, log):
     log.info("cassie: %d bubble(s) tapped", tapped)
 
 
+def truegold_crucible(app, phone, log):
+    """World map -> side panel (">" tab, left middle) -> scroll to "Truegold Crucible" -> Truegold Crucible screen."""
+    if phone.exists(text="World", region=NAV_REGION):            # on the town: the button names the world map
+        phone.tap(text="World", region=NAV_REGION)
+        phone.wait_for(text="Town", region=NAV_REGION, timeout=15)
+    phone.tap(image="side_tab", region=LEFT_MID, timeout=10)
+    phone.wait_for(text="Wilderness", region=SIDE_PANEL, timeout=10)
+    m = phone.scroll_to(text="Truegold Crucible", region=SIDE_PANEL, max_swipes=10)
+    phone.tap_xy(*m.center)
+    phone.wait_for(text="Remaining today", region=CRUCIBLE_REMAINING, timeout=10)
+    log.info("truegold crucible open")
+    # Refine until "Remaining today: 0" (7 a day; each costs more resources, instant, no pop-up)
+    for _ in range(8):
+        left = refines_left(phone)
+        if left is None:
+            log.info("crucible: can't read 'Remaining today'; not refining")
+            break
+        if left == 0:
+            break
+        phone.tap(text="Refine", region=CRUCIBLE_REFINE, timeout=5)
+        time.sleep(1)
+        phone.forget_screen()
+    log.info("crucible: refines left today: %s", refines_left(phone))
+    # then Super Refine x 1, once (never "x N")
+    phone.tap(text="Super Refine", region=CRUCIBLE_SUPER_X1, timeout=5)
+    dismiss_popup(phone, wait=3)
+    log.info("crucible: super refine x1 done")
+    back_to_main(phone)
+
+
+def refines_left(phone, tries=3):
+    """N from "Remaining today: N" (OCR sometimes puts the N on its own line), or None if unreadable."""
+    for _ in range(tries):
+        m = re.search(r"today\D*(\d+)|^(\d+)\b", " ".join(phone.read_text(CRUCIBLE_REMAINING).split()), re.IGNORECASE)
+        if m:
+            return int(m.group(1) or m.group(2))
+        phone.forget_screen()
+    return None
+
+
 PARTS = {"gems": gems, "vip": vip, "deals": deals, "nomadic_merchant": nomadic_merchant,
-         "cassie_recruit": cassie_recruit}
+         "cassie_recruit": cassie_recruit, "truegold_crucible": truegold_crucible}
 
 
 def back_to_main(phone):

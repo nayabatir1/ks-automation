@@ -61,3 +61,6 @@ MERCHANT_REFRESH = (0.6, 0.19, 1, 0.24)         # ...green "Free Refresh" (costs
 MERCHANT_PRICES = [(x, y) for y in (1095, 1529) for x in (192, 540, 888)]   # centres of the 6 price bars (pixels)
 COMPASS_BUTTON = (0.75, 0.65, 1, 0.8)           # world map, Q4 right: compass button -> Intel Mission
 INTEL_HERO = (0, 0.12, 0.3, 0.26)               # Intel Mission: hero portrait (top left) while there's one to tap
+CRUCIBLE_REMAINING = (0.25, 0.555, 0.65, 0.59)  # Truegold Crucible: "Remaining today: 7" (above the Refine button)
+CRUCIBLE_REFINE = (0.3, 0.59, 0.7, 0.64)        # Truegold Crucible: teal "Refine" (7 a day, costs resources only)
+CRUCIBLE_SUPER_X1 = (0.52, 0.83, 0.95, 0.89)    # ...teal "Super Refine x 1" (bottom right; "x N" is left: never)

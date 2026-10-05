@@ -266,6 +266,11 @@ Progress log, 2026-10-03:
     Cassie's picture (templates/cassie_bubble.png, matched at several sizes: bubbles are drawn smaller near the town
     edge). The tap is instant, no pop-up; one tap turned the other buildings' Cassie bubbles into other heroes
     (knight / helmet / archer bubbles are not tapped). The view is carried from building to building (~5 s each).
+58. `dailies` part `truegold_crucible`: world map -> side panel -> scroll to "Truegold Crucible" -> tap Refine
+    until "Remaining today: 0" (7 a day; instant, no pop-up; the cost doubles each time but is resources only:
+    5,000 -> 50,000 of each), then Super Refine x 1 once (costs raw truegold: 10, then 20; "Super Refines This
+    Week" resets Mondays 00:00 UTC), then Back. "Super Refine x N" is never tapped. The OCR sometimes reads the N
+    of "Remaining today: N" on its own line; unreadable -> stop refining (never treated as 0).
 
 Where to see the next run time: `run.py --timeline` (or `--list`, `state.json` next_at, and the log's "next ..." line).
 
