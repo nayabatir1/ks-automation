@@ -280,6 +280,9 @@ Progress log, 2026-10-03:
     Attack -> Deploy: preset M1 -> Deploy -> wait 2.2 x the march time. The mission box buttons are found by colour
     (the white lettering of "Rescue" doesn't OCR): green / teal / orange and brighter than grass. Stops below 20 meat.
     The compass template skips its top-right corner (a red dot shows there).
+60. New job `collect_stamina` (jobs/collect_stamina.py, DISABLED until the user gives its schedule): Intel Mission
+    -> meat icon -> "Get More": tap Gourmet Feast's button only when it's lit (grey while "Next Supply" counts
+    down), then close everything. Never Use / Buy & Use (gems) / Go / "+". No timer reading (the user's choice).
 
 Where to see the next run time: `run.py --timeline` (or `--list`, `state.json` next_at, and the log's "next ..." line).
 

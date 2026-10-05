@@ -73,3 +73,6 @@ DEPLOY_PRESETS = (0, 0.09, 0.9, 0.16)           # Deploy: saved squad flags MO V
 DEPLOY_TIME = (0.55, 0.9, 0.95, 0.935)          # Deploy: march time "00:00:10" above the Deploy button
 DEPLOY_BUTTON = (0.55, 0.92, 0.97, 0.99)         # Deploy: teal "Deploy" (meat cost)
 POPUP_EXIT = (0.1, 0.75, 0.9, 0.97)             # battle Rewards: "Tap anywhere to exit"
+INTEL_MEAT_ICON = (840, 172)                    # Intel Mission: the meat icon (NOT the green "+" right of it: buys)
+GET_MORE_TITLE = (0.3, 0.18, 0.7, 0.23)         # stamina box: "Get More"
+FEAST_BUTTON = (745, 850, 995, 940)             # Get More: Gourmet Feast's button (grey while "Next Supply" counts down)
