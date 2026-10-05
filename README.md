@@ -271,6 +271,15 @@ Progress log, 2026-10-03:
     5,000 -> 50,000 of each), then Super Refine x 1 once (costs raw truegold: 10, then 20; "Super Refines This
     Week" resets Mondays 00:00 UTC), then Back. "Super Refine x N" is never tapped. The OCR sometimes reads the N
     of "Remaining today: N" on its own line; unreadable -> stop refining (never treated as 0).
+59. The arena job's Intel Mission part is renamed `pan_extra_intel_mission` (taps the hero portrait). New job
+    `intel_mission` (jobs/intel_mission.py, disabled until the user says; 00:10 UTC right after dailies + 10:00 UTC):
+    world map -> compass -> Intel Mission. Pins are told apart by their white icon whatever the colour
+    (templates/intel_pin_tent/bear/swords/lion.png; other kinds score <= 0.55, a match is >= 0.7); the boss is never
+    matched. A pin with a green tick is tapped to claim its reward (it disappears; no Claim All). Open pins:
+    tent View -> Rescue; swords View -> Conquer -> Squad Settings Fight -> Rewards tap to exit; bear / lion View ->
+    Attack -> Deploy: preset M1 -> Deploy -> wait 2.2 x the march time. The mission box buttons are found by colour
+    (the white lettering of "Rescue" doesn't OCR): green / teal / orange and brighter than grass. Stops below 20 meat.
+    The compass template skips its top-right corner (a red dot shows there).
 
 Where to see the next run time: `run.py --timeline` (or `--list`, `state.json` next_at, and the log's "next ..." line).
 
