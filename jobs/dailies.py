@@ -171,10 +171,7 @@ def gem_price(img, xy):
 def cassie_recruit(app, phone, log):
     """Town: Stable, Barracks, Range and Enlistment Office can each show a bubble with Cassie's picture; tap every
     one (instant, no pop-up). The first three stand together, so one stop often shows several bubbles."""
-    if phone.exists(text="Town", region=NAV_REGION):            # on the world map: the button names the town
-        phone.tap(text="Town", region=NAV_REGION)
-        phone.wait_for(text="World", region=NAV_REGION, timeout=15)
-    view, tapped = app.town_view, 0
+    view, tapped = app.town_from_launch(phone, log), 0
     for name in ("Stable", "Barracks", "Range", "Enlistment Office"):
         x, y = go_to_building(phone, log, name, view=view)
         view = (TOWN[name][0] - x, TOWN[name][1] + LABEL_TO_BUILDING - y)   # where the view is now

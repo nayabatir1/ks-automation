@@ -54,11 +54,8 @@ def pan_extra_intel_mission(app, phone, log):
 
 
 def fight_arena(app, phone, log):
-    # 1. town view (if the world map is showing, its bottom-right button says "Town")
-    view = app.town_view                         # (0, 0) right after a fresh launch: no need to look first
-    if phone.exists(text="Town", region=NAV_REGION):
-        phone.tap(text="Town", region=NAV_REGION)
-        phone.wait_for(text="World", region=NAV_REGION, timeout=15)   # the town is shown where it was left
+    # 1. town view with a known position (relaunches the game if needed)
+    view = app.town_from_launch(phone, log)
 
     # 2. find the Arena by the building names and tap it
     x, y = go_to_building(phone, log, "Arena", view=view)

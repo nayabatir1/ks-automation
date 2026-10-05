@@ -283,6 +283,17 @@ Progress log, 2026-10-03:
 60. New job `collect_stamina` (jobs/collect_stamina.py, DISABLED until the user gives its schedule): Intel Mission
     -> meat icon -> "Get More": tap Gourmet Feast's button only when it's lit (grey while "Next Supply" counts
     down), then close everything. Never Use / Buy & Use (gems) / Go / "+". No timer reading (the user's choice).
+61. New job `troops_training` (Barracks -> tap twice -> Train -> tabs Barracks/Stable/Range: 950 each, only when
+    the status panel isn't "Training"). Schedule (user's): 00:30 UTC / 6am IST troops_training -> dailies ->
+    collect_stamina -> intel_mission; 11:30 UTC / 5pm IST troops_training -> collect_stamina -> intel_mission (order
+    by priority 90/100/105/110). State.record re-reads state.json before saving (a run no longer reverts others).
+62. Town jobs (arena, cassie_recruit, troops_training) get a known town view via Kingshot.town_from_launch(): if the
+    view isn't known (anything but right after a fresh launch) the game is relaunched (~25 s), which centres the
+    town on the Town Center ((0, 0)); then map drag + the building's outline picture. The user's choice: more
+    reliable than working out an old view (tried: corner reset — the town is a skewed diamond with empty corners;
+    drag odometry — short drags don't move the map; panorama matching — the user found it not stable enough).
+    troops_training centres the Barracks before tapping (its menu reaches ~300 px right; while training it holds
+    Finish = gems, never tapped).
 
 Where to see the next run time: `run.py --timeline` (or `--list`, `state.json` next_at, and the log's "next ..." line).
 

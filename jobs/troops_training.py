@@ -12,7 +12,6 @@ from core.schedule import At
 from core.task import job
 from core.timeparse import parse_duration
 from regions import (
-    NAV_REGION,
     TRAIN_BUTTON,
     TRAIN_LABEL,
     TRAIN_QTY,
@@ -21,7 +20,7 @@ from regions import (
     TRAIN_TIMER,
     TRAIN_TITLE,
 )
-from town import go_to_building
+from town import drag, find_building, go_to_building
 
 QUANTITY = 950
 QTY_BOX = (810, 1892)             # the quantity box
@@ -29,10 +28,13 @@ QTY_BOX = (810, 1892)             # the quantity box
 
 @job(schedule=At("00:30", "11:30", tz="UTC"), priority=90)   # 6am + 5pm IST, first in those sessions
 def troops_training(app, phone, log):
-    if phone.exists(text="Town", region=NAV_REGION):            # on the world map: the button names the town
-        phone.tap(text="Town", region=NAV_REGION)
-        phone.wait_for(text="World", region=NAV_REGION, timeout=15)
-    x, y = go_to_building(phone, log, "Barracks", view=app.town_view)
+    x, y = go_to_building(phone, log, "Barracks", view=app.town_from_launch(phone, log))
+    if abs(x - 540) > 100:                               # its tap menu reaches ~300 px right: centre it first
+        drag(phone, x - 540, 0)
+        m = find_building(phone, "Barracks")
+        if not m:
+            raise ElementNotFound("lost the Barracks after centring it")
+        x, y = m.center
     app.town_view = None
     open_training(phone, x, y)
     log.info("training page open")

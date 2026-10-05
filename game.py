@@ -60,6 +60,18 @@ class Kingshot(Task):
             self.town_view = None                        # ...and moved the town view
         self.start_view = self.current_view(phone)
 
+    def town_from_launch(self, phone, log):
+        """The town view with a known position, for jobs that go to a building: right after a fresh launch it is
+        centred on the Town Center ((0, 0)); otherwise the game is relaunched (the user's choice: more reliable than
+        working out where an old view is). Returns the view."""
+        if self.town_view is None:
+            log.info("town view unknown: relaunching the game")
+            self.app_was_open = False
+            phone.launch(self.package, self.activity)
+            self.on_open(phone, log)
+        self._just_opened = False
+        return self.town_view
+
     def after_job(self, phone, log):
         """Close the job's pages and go back to the view the job started from: world map or town."""
         self.to_main_screen(phone, log)
