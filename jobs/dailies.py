@@ -272,16 +272,21 @@ def swipe_tabs(phone, x_from, x_to):
 def claim_free_chest(phone, log):
     """The open tab's free chest, in the header: a chest with its own red dot (labelled "Claimable"), or one
     labelled "Free" (Daily Deals). Some show a "Claimed" pop-up afterwards. Returns 1 if claimed, else 0."""
-    img = phone.screen()
-    dots = vision.red_dots(img, SHOP_FREE_AREA)
+    for _ in range(5):                                   # the tab's content can take a few seconds to draw
+        img = phone.screen()
+        dots = vision.red_dots(img, SHOP_FREE_AREA)
+        label = None if dots else free_label(img)
+        if dots or label:
+            break
+        time.sleep(0.8)
+        phone.forget_screen()
     if dots:
         x, y = dots[0][0] - 40, dots[0][1] + 25          # the dot sits at the chest's top right
-    else:
-        label = free_label(img)
-        if not label:
-            log.info("tab has a red dot but no free chest found")
-            return 0
+    elif label:
         x, y = label[0], label[1] - 75                   # the chest is just above its label
+    else:
+        log.info("tab has a red dot but no free chest found")
+        return 0
     phone.tap_xy(x, y)
     log.info("claimed the free chest at (%d, %d)", x, y)
     dismiss_popup(phone, wait=2)                         # "Claimed" pop-up (some tabs only)
