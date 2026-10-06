@@ -216,10 +216,8 @@ def due_jobs(name, task, state, now, ahead=timedelta(0)):
 
 
 def retry_at(job):
-    """After a failure: a job with fixed times waits for its next slot (the user's rule: those run only at their
-    times, never queued); a timer-based job retries after retry_minutes."""
-    if job.schedule:
-        return job.schedule.next_slot(utcnow())
+    """After a failure (the game didn't open / log in, or the job failed): try again after retry_minutes, also for
+    a job with fixed times. The user's rule: that is the only time a job runs outside its schedule."""
     return utcnow() + timedelta(minutes=job.retry_minutes)
 
 
