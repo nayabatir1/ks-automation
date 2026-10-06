@@ -11,6 +11,10 @@ Launch sequence seen on 2026-10-03 (fresh start, ~25 s total):
 """
 import time
 
+import cv2
+import numpy as np
+
+from core import vision
 from core.phone import ElementNotFound, PhoneError
 from core.task import Task
 from regions import (
@@ -147,7 +151,16 @@ class Kingshot(Task):
                    {"text": "Welcome back", "region": WELCOME_TITLE},
                    {"text": "Enter Game", "region": RESOURCE_PACK_ENTER},   # after an update (resource pack box)
                    also or {"text": "Backpack", "region": NAV_REGION}]
-        which = phone.wait_any(*targets, timeout=timeout)
+        try:
+            which = phone.wait_any(*targets, timeout=timeout)
+        except ElementNotFound:          # nothing known showed: a pop-up with an X of a new colour / size?
+            xy = any_close_x(phone.screen())
+            if xy is None or closed >= max_popups:
+                raise
+            log.info("closing pop-up %d (an X found by its shape at %s)", closed + 1, xy)
+            phone.tap_xy(*xy)
+            time.sleep(1.5)
+            return True
         if which == 4:
             return False
         if closed >= max_popups:
@@ -176,3 +189,23 @@ class Kingshot(Task):
         m = phone.last_match
         phone.tap_xy(*m.center)
         return m
+
+
+def any_close_x(img, min_score=0.85):
+    """A pop-up's close X found by its white cross shape alone, whatever the colour behind it or its size:
+    (x, y) or None. Normal screens score <= 0.71 against it, real X buttons ~0.9."""
+    part, (ox, oy) = vision.crop(img, POPUP_X_REGION)
+    white = _white(part)
+    tpl = _white(vision.load_template("close_x")[0])[6:-6, 6:-6]
+    best, at = 0.0, None
+    for scale in (0.8, 0.9, 1.0, 1.1, 1.25):
+        t = cv2.resize(tpl, None, fx=scale, fy=scale)
+        _, score, _, (x, y) = cv2.minMaxLoc(cv2.matchTemplate(white, t, cv2.TM_CCOEFF_NORMED))
+        if score > best:
+            best, at = score, (ox + x + t.shape[1] // 2, oy + y + t.shape[0] // 2)
+    return at if best >= min_score else None
+
+
+def _white(img):
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    return (((hsv[:, :, 1] < 70) & (hsv[:, :, 2] > 200)) * 255).astype(np.float32)
