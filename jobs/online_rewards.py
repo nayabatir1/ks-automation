@@ -47,7 +47,7 @@ def online_rewards(app, phone, log):
     if phone.exists(text="Town", region=NAV_REGION):
         log.info("already on the world map")
     else:
-        app.tap_on_main(phone, log, image="world_icon", region=Q4)
+        app.tap_on_main(phone, log, image="world_icon", region=Q4, then={"text": "Town", "region": NAV_REGION})
         phone.wait_for(text="Town", region=NAV_REGION, timeout=15)
         log.info("on the world map")
 

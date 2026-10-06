@@ -1,4 +1,4 @@
-"""Kingshot job: troops training. 00:30 + 11:30 UTC (6am + 5pm IST), first job of those sessions.
+"""Kingshot job: troops training. 00:30 + 12:00 UTC (6am + 5:30pm IST), first job of those sessions.
 
 Town: Barracks -> tap twice (the first tap collects finished troops) -> menu "Train" -> training page. Its bottom
 tabs switch between Barracks / Stable / Range; on each: quantity 950 -> Train. A tab that is still training shows
@@ -26,7 +26,7 @@ QUANTITY = 950
 QTY_BOX = (810, 1892)             # the quantity box
 
 
-@job(schedule=At("00:30", "11:30", tz="UTC"), priority=90)   # 6am + 5pm IST, first in those sessions
+@job(schedule=At("00:30", "12:00", tz="UTC"), priority=90)   # 6am + 5:30pm IST, first in those sessions
 def troops_training(app, phone, log):
     x, y = go_to_building(phone, log, "Barracks", view=app.town_from_launch(phone, log))
     if abs(x - 540) > 100:                               # its tap menu reaches ~300 px right: centre it first

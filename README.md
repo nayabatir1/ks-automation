@@ -377,6 +377,16 @@ Turn it back on:
 
 Nothing is deleted: code, job schedules (`state.json`) and logs stay in `~/projects/ks`.
 
+Stop the job that is running right now (e.g. it is doing something wrong):
+
+    cd ~/projects/ks
+    .venv/bin/python run.py --pause 1h          # first, so the timer doesn't start a new run a minute later
+    pkill -f "projects/ks/run.py"               # stops the running job
+    adb shell am force-stop com.run.tower.defense   # close the game (the job didn't get to do it)
+    rm -f .runner.lock                          # only if a later run says "Another run is still in progress"
+
+Check nothing is left: `ps -eo pid,args | grep "[r]un.py"` prints nothing. Start again with `run.py --resume`.
+
 Just a break instead: `.venv/bin/python run.py --pause 12h` (any duration), and `.venv/bin/python run.py --resume`
 to end it sooner.
 

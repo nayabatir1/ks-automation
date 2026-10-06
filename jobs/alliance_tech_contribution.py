@@ -21,7 +21,7 @@ from regions import (
 @job()
 def alliance_tech_contribution(app, phone, log):
     # 1. "Alliance" in the bottom menu (Q4); its 99+ badge may or may not be there, so match the text
-    app.tap_on_main(phone, log, text="Alliance", region=NAV_Q4)
+    app.tap_on_main(phone, log, text="Alliance", region=NAV_Q4, then={"text": "Alliance", "region": ALLIANCE_TITLE})
     phone.wait_for(text="Alliance", region=ALLIANCE_TITLE, timeout=10)   # Alliance screen's title (top-left)
     log.info("alliance screen open")
 

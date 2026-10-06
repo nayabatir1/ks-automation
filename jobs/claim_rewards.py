@@ -1,4 +1,4 @@
-"""Kingshot job: claim rewards. 00:30 + 11:30 UTC (6am + 5pm IST), after intel_mission.
+"""Kingshot job: claim rewards. 00:30 + 12:00 UTC (6am + 5:30pm IST), after intel_mission.
 Parts: mail_rewards, alliance_rewards, help_members.
 Test one part: run.py --job claim_rewards --part alliance_rewards
 Starts on the city screen or world map; after_job backs out to where it started.
@@ -27,7 +27,7 @@ from regions import (
 )
 
 
-@job(schedule=At("00:30", "11:30", tz="UTC"), priority=115)   # 6am + 5pm IST, right after intel_mission (110)
+@job(schedule=At("00:30", "12:00", tz="UTC"), priority=115)   # 6am + 5:30pm IST, right after intel_mission (110)
 def claim_rewards(app, phone, log):
     run_parts(app, phone, log, {"mail_rewards": mail_rewards, "alliance_rewards": alliance_rewards,
                                 "help_members": help_members})

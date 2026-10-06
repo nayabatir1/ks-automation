@@ -79,7 +79,7 @@ def gems(app, phone, log):
 def vip(app, phone, log):
     """VIP (orange V badge; the level number changes) -> VIP screen: the daily sign-in VIP XP chest (red dot) and
     the green Claim of "VIP N Daily Free Bundle". !! The "+" by the XP bar, Shop and the ₹ Special Pack: never."""
-    app.tap_on_main(phone, log, image="vip_badge", region=VIP_BADGE)
+    app.tap_on_main(phone, log, image="vip_badge", region=VIP_BADGE, then={"text": "VIP", "region": VIP_TITLE})
     phone.wait_for(text="VIP", region=VIP_TITLE, timeout=10)
     log.info("vip screen open")
     dots = vision.red_dots(phone.screen(), VIP_XP_CHEST)

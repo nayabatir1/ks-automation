@@ -180,14 +180,21 @@ class Kingshot(Task):
             self._wait_gone_quietly(phone, text="Welcome back", region=WELCOME_TITLE)
         return True
 
-    def tap_on_main(self, phone, log, timeout=15, **target):
+    def tap_on_main(self, phone, log, timeout=15, then=None, **target):
         """First tap of a job on the city / world map, done straight away (no extra look first).
-        If a pop-up turns up instead (they can arrive a moment late), close it, then tap."""
+        If a pop-up turns up instead (they can arrive a moment late), close it, then tap.
+        then={text/image, region}: what the tap should open. The game now and then ignores a job's first tap, so
+        if that doesn't show within 8 s (and the button is still there) tap once more."""
         closed = 0
         while self._close_one_popup(phone, log, closed, 8, timeout, also=target):
             closed += 1
         m = phone.last_match
         phone.tap_xy(*m.center)
+        if then and not phone.exists(**then, timeout=8):
+            phone.forget_screen()
+            if phone.find(**target):                     # still on the same screen: the tap was ignored
+                log.info("first tap ignored; tapping again")
+                phone.tap_xy(*m.center)
         return m
 
 
