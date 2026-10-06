@@ -83,7 +83,8 @@ def vip(app, phone, log):
         dismiss_popup(phone)
         log.info("vip: daily VIP XP claimed")
     m = phone.find(text="Claim", region=VIP_BUNDLE_CLAIM)
-    if m and 35 <= vision.median_hue(phone.last_screen, VIP_BUNDLE_CLAIM) <= 85:
+    button = (m.x - 80, m.y - 20, m.x + m.w + 80, m.y + m.h + 25) if m else None   # the button only, not the row
+    if m and 35 <= vision.median_hue(phone.last_screen, button) <= 85:
         phone.tap_xy(*m.center)
         dismiss_popup(phone)
         log.info("vip: daily free bundle claimed")
