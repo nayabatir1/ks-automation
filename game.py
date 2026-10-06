@@ -143,20 +143,21 @@ class Kingshot(Task):
         """Wait for a pop-up, the bottom menu, or `also`; close a pop-up if that's what showed.
         Returns True if a pop-up was closed, False if the menu (or `also`) showed."""
         targets = [{"image": "close_x", "region": POPUP_X_REGION},       # pop-ups first
+                   {"image": "close_x_orange", "region": POPUP_X_REGION},  # the same X on an orange sale pop-up
                    {"text": "Welcome back", "region": WELCOME_TITLE},
                    {"text": "Enter Game", "region": RESOURCE_PACK_ENTER},   # after an update (resource pack box)
                    also or {"text": "Backpack", "region": NAV_REGION}]
         which = phone.wait_any(*targets, timeout=timeout)
-        if which == 3:
+        if which == 4:
             return False
         if closed >= max_popups:
             raise RuntimeError(f"still a pop-up after closing {max_popups}; something is off")
-        if which == 0:
+        if which in (0, 1):
             m = phone.last_match
             log.info("closing pop-up %d (X at %s, score %.2f)", closed + 1, m.center, m.score)
             phone.tap_xy(*m.center)
-            self._wait_gone_quietly(phone, image="close_x", region=POPUP_X_REGION)
-        elif which == 2:   # "Resource pack downloading...": always Enter Game (the user's choice, not Download Now)
+            self._wait_gone_quietly(phone, image=m.text, region=POPUP_X_REGION)
+        elif which == 3:   # "Resource pack downloading...": always Enter Game (the user's choice, not Download Now)
             log.info("pop-up %d: resource pack -> Enter Game", closed + 1)
             phone.tap_xy(*phone.last_match.center)
             self._wait_gone_quietly(phone, text="Enter Game", region=RESOURCE_PACK_ENTER)

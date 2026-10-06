@@ -215,6 +215,14 @@ def due_jobs(name, task, state, now, ahead=timedelta(0)):
     return sorted(out, key=lambda j: (j.priority, when(j)))
 
 
+def retry_at(job):
+    """After a failure: a job with fixed times waits for its next slot (the user's rule: those run only at their
+    times, never queued); a timer-based job retries after retry_minutes."""
+    if job.schedule:
+        return job.schedule.next_slot(utcnow())
+    return utcnow() + timedelta(minutes=job.retry_minutes)
+
+
 def next_time(job, result):
     """What a job returned -> when it may run next (aware datetime)."""
     now = utcnow()
@@ -251,8 +259,7 @@ def run_jobs(phone, name, task, state, jobs, wait=True):
         finally:
             close_app(phone, task)
         for j in jobs:
-            state.record(f"{name}.{j.name}", utcnow(), status, f"app did not open: {error}", 0,
-                         utcnow() + timedelta(minutes=j.retry_minutes))
+            state.record(f"{name}.{j.name}", utcnow(), status, f"app did not open: {error}", 0, retry_at(j))
         return False
 
     ok = True
@@ -296,7 +303,7 @@ def run_batch(phone, name, task, state, jobs, tlog):
             return ok, True                 # job state untouched: it runs again after the pause
         if status != "ok":
             ok = False
-            nxt = utcnow() + timedelta(minutes=j.retry_minutes)
+            nxt = retry_at(j)
             save_failure(phone, key)
         state.record(key, started, status, error, secs, nxt)
         log.info("--- %s: %s in %.1fs, next %s", key, status, secs, _fmt_both(nxt))
