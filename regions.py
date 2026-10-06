@@ -84,3 +84,16 @@ TRAIN_QTY = (0.7, 0.8, 0.79, 0.82)              # quantity box (tap -> a text fi
 TRAIN_TIMER = (0.2, 0.75, 0.8, 0.78)            # while training: "Training  10:36:26" (the status panel)
 TRAIN_QTY_FIELD = (0.8, 0.89, 0.95, 0.93)        # the quantity text field's "OK" (only while it is open)
 RESOURCE_PACK_ENTER = (0.08, 0.6, 0.5, 0.66)     # launch after an update: "Enter Game" (orange; "Download Now" is right)
+BANK_DAILY_BUTTON = (0.1, 0.585, 0.41, 0.618)   # Deals > Bank: the Daily 5% box's button (Withdraw / Deposit / In Deposit)
+BANK_DIALOG_DEPOSIT = (0.5, 0.65, 0.95, 0.71)   # deposit dialog: teal "Deposit" (orange "TOP UP NOW" left of it = money: never)
+MERCHANT_BUY_ITEM = (0.25, 0.41, 0.9, 0.46)     # merchant gem buy dialog: item name ("10 VIP XP")
+MERCHANT_BUY_BUTTON = (0.28, 0.61, 0.72, 0.67)  # ...its orange gem-price button
+MAIL_BUTTON = (0.8, 0.8, 1, 0.9)                # bottom right (town and world map): the mail envelope (templates/mail_button.png)
+MAIL_TABS = {"Alliance": (336, 293), "System": (538, 293), "Reports": (745, 293)}   # Mail: the tabs with rewards
+MAIL_CLAIM_ALL = (0.5, 0.95, 1, 1)              # Mail: "Read & Claim All" (bottom right; "Delete Read" left: never)
+ALLIANCE_CHESTS = (877, 1113)                   # Alliance screen: "Chests" button
+ALLIANCE_HELP = (877, 1713)                     # Alliance screen: "Help" button
+CHEST_TABS = {"Loot Chest": (287, 711), "Alliance Gift": (793, 711)}   # Chests: the two tabs
+CHEST_CLAIM_ALL = (0, 0.88, 1, 0.98)            # Chests: green "Claim All" (centre on Loot Chest, right on Alliance Gift)
+BIG_CHEST = (360, 260, 720, 470)                # Chests: the big chest's lid (pixels); glows (lid open, light) when it can open
+HELP_ALL = (0, 0.9, 1, 0.99)                    # Alliance Help: teal "Help All" (gone when nobody needs help)

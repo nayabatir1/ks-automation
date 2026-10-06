@@ -12,9 +12,12 @@ import numpy as np
 import pytesseract
 
 from core import vision
+from core.phone import ElementNotFound
 from core.schedule import At
 from core.task import job, run_parts
 from regions import (
+    BANK_DAILY_BUTTON,
+    BANK_DIALOG_DEPOSIT,
     CRUCIBLE_REFINE,
     CRUCIBLE_REMAINING,
     CRUCIBLE_SUPER_X1,
@@ -22,6 +25,8 @@ from regions import (
     FREE_COLUMN,
     GEMS_SHOP,
     LEFT_MID,
+    MERCHANT_BUY_BUTTON,
+    MERCHANT_BUY_ITEM,
     MERCHANT_PRICES,
     MERCHANT_REFRESH,
     MERCHANT_TIMER,
@@ -49,7 +54,7 @@ MAX_TAB_PAGES = 8
 BUBBLE_SCALES = (0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.1)   # bubbles are drawn smaller near the town edge
 MAX_MERCHANT_ROUNDS = 300      # buys + refreshes per run, so it can never loop (one stock took ~80 buys)
 SEARCH_SWIPE = (800, 450)
-PRICE_ROWS = (0, 0.45, 1, 0.67)  # merchant: the rows with the 6 price bars
+PRICE_ROWS = (0, 0.32, 1, 0.67)  # merchant: the rows with the 6 boxes (icons and price bars)
 BLANK_SPOT_PX = (540, 300)      # dim area above reward pop-ups (no buttons behind it take the tap)
 
 
@@ -98,18 +103,55 @@ def deals(app, phone, log):
     app.tap_on_main(phone, log, text="Deals", region=DEALS_LABEL)
     phone.wait_for(text="Deals", region=SCREEN_TITLE, timeout=10)
     log.info("deals open")
+    log.info("deals: %d free chest(s) claimed", claim_shop_tabs(phone, log, need_label=True))   # e.g. Treasure Cove
     for tab in ("Earn", "Rall"):                        # "Sign-in & Earn It", "Hero Rally" (OCR-safe parts)
         if open_tab(phone, tab):
             log.info("deals, %s: %d free reward(s) claimed", tab, claim_glowing(phone))
         else:
             log.info("deals: no %r tab", tab)
+    if open_tab(phone, "Bank"):
+        bank(phone, log)
     back_to_main(phone)
+
+
+def bank(phone, log):
+    """Deals > Bank, the Daily 5% box: Withdraw once its day is up (deposit + 5%), then deposit again (the dialog
+    starts at the maximum). "In Deposit" = still running. !! Never "TOP UP NOW" (real money) or the other boxes."""
+    time.sleep(1)
+    phone.forget_screen()
+    text = phone.read_text(BANK_DAILY_BUTTON)
+    if "Withdraw" in text:
+        phone.tap_xy(*button_centre(BANK_DAILY_BUTTON))
+        dismiss_popup(phone)                             # Rewards: the gems back
+        log.info("bank: withdrew")
+        phone.forget_screen()
+        text = phone.read_text(BANK_DAILY_BUTTON)
+    if "In Deposit" in text:
+        log.info("bank: still in deposit")
+        return
+    if "Deposit" not in text:
+        log.info("bank: daily box shows %r; not touching it", text)
+        return
+    phone.tap_xy(*button_centre(BANK_DAILY_BUTTON))
+    m = phone.wait_for(text="Deposit", region=BANK_DIALOG_DEPOSIT, timeout=5)
+    button = (m.x - 120, m.y - 25, m.x + m.w + 120, m.y + m.h + 30)
+    if not 75 <= vision.median_hue(phone.last_screen, button) <= 105:
+        raise RuntimeError("the deposit dialog's Deposit button isn't teal; not tapping")
+    phone.tap_xy(*m.center)
+    time.sleep(1.5)
+    log.info("bank: deposited (the maximum)")
+
+
+def button_centre(region):
+    x1, y1, x2, y2 = region
+    return int((x1 + x2) / 2 * 1080), int((y1 + y2) / 2 * 2340)
 
 
 def nomadic_merchant(app, phone, log):
     """Shop (bottom menu) -> Nomadic Merchant: buy every box priced in bread / wood / stone / iron until all 6 are
-    priced in gems, then Free Refresh and again, until the refresh isn't free.
-    !! Never a box priced in gems, never a refresh that isn't free."""
+    priced in gems, then Free Refresh and again, until the refresh isn't free. The VIP XP box (yellow V badge) is
+    always bought, also for gems (the user's rule).
+    !! No other box priced in gems, never a refresh that isn't free."""
     app.tap_on_main(phone, log, text="Shop", region=SHOP_NAV)
     phone.tap(text="Nomadic", region=SHOP_BOTTOM_TABS, timeout=10)
     phone.wait_for(text="Refreshes in", region=MERCHANT_TIMER, timeout=10)
@@ -118,17 +160,23 @@ def nomadic_merchant(app, phone, log):
     for round_no in range(MAX_MERCHANT_ROUNDS):
         # one screenshot of the price bars, all 6 evaluated; then tap each resource-priced one, but re-check that
         # one bar just before its tap (~0.3 s): a buy restocks and reorders the boxes, so a box can turn into gems
-        phone.forget_screen()
-        img = phone.screen(PRICE_ROWS)
-        boxes = [xy for xy in MERCHANT_PRICES if price_bar(img, xy) and not gem_price(img, xy)]
+        for _ in range(4):                               # a buy's animation can cover the bars for a moment
+            phone.forget_screen()
+            img = phone.screen(PRICE_ROWS)
+            if all(price_bar(img, xy) for xy in MERCHANT_PRICES):
+                break
+            time.sleep(1)
+        boxes = [xy for xy in MERCHANT_PRICES if price_bar(img, xy) and (not gem_price(img, xy) or vip_xp(img, xy))]
         if boxes:
             for xy in boxes:
                 phone.forget_screen()
-                now = phone.screen(bar_region(xy))
+                now = phone.screen(box_region(xy))
                 if price_bar(now, xy) and not gem_price(now, xy):
-                    phone.tap_xy(*xy)
+                    phone.tap_xy(*xy)                    # resources: bought at once
                     bought += 1
                     time.sleep(0.3)
+                elif price_bar(now, xy) and vip_xp(now, xy):
+                    bought += buy_vip_xp(phone, log, xy)
             if round_no % 5 == 4 and not phone.exists(text="Refreshes in", region=MERCHANT_TIMER, timeout=3):
                 log.info("merchant: the merchant screen is gone (not enough resources?); stopping")
                 phone.back()
@@ -147,9 +195,35 @@ def nomadic_merchant(app, phone, log):
     back_to_main(phone)
 
 
-def bar_region(xy):
-    """Screen rows of one price bar (for a quick strip screenshot)."""
-    return 0, (xy[1] - 32) / 2340, 1, (xy[1] + 32) / 2340
+def buy_vip_xp(phone, log, xy):
+    """Gem buys open a "Buy" dialog: check it is VIP XP, then tap its orange gem button. Returns 1 if bought."""
+    phone.tap_xy(*xy)
+    try:
+        phone.wait_for(text="VIP XP", region=MERCHANT_BUY_ITEM, timeout=4)
+    except ElementNotFound:
+        log.info("merchant: no VIP XP buy dialog; not buying")
+        phone.back()
+        return 0
+    hue = vision.median_hue(phone.screen(MERCHANT_BUY_BUTTON), MERCHANT_BUY_BUTTON)
+    if not 8 <= hue <= 30:
+        raise RuntimeError(f"VIP XP buy button isn't orange (hue {hue:.0f}); not tapping")
+    x1, y1, x2, y2 = MERCHANT_BUY_BUTTON
+    phone.tap_xy(int((x1 + x2) / 2 * 1080), int((y1 + y2) / 2 * 2340))
+    time.sleep(1.5)
+    phone.forget_screen()
+    log.info("merchant: bought VIP XP (gems)")
+    return 1
+
+
+def box_region(xy):
+    """Screen rows of one box, its icon to its price bar (for a quick strip screenshot)."""
+    return 0, (xy[1] - 340) / 2340, 1, (xy[1] + 32) / 2340
+
+
+def vip_xp(img, xy):
+    """Is the item of the box with this price bar VIP XP (yellow V badge, templates/merchant_vip_xp.png)?"""
+    x, y = xy
+    return vision.find_image(img, "merchant_vip_xp", (x - 160, y - 330, x + 160, y - 50), threshold=0.8) is not None
 
 
 def price_bar(img, xy):
@@ -238,7 +312,7 @@ def back_to_main(phone):
     phone.wait_for(text="Backpack", region=NAV_REGION, timeout=10)
 
 
-def claim_shop_tabs(phone, log):
+def claim_shop_tabs(phone, log, need_label=False):
     """Visit each red-dot tab (names and pictures change) and claim its free chest. Returns how many."""
     for _ in range(3):                                   # tab row back to its start
         if not swipe_tabs(phone, TAB_SWIPE[1], TAB_SWIPE[0]):
@@ -255,7 +329,7 @@ def claim_shop_tabs(phone, log):
             phone.tap_xy(max(40, x - 140), SHOP_TAB_ROW_Y)
             time.sleep(1)
             phone.forget_screen()
-            claimed += claim_free_chest(phone, log)
+            claimed += claim_free_chest(phone, log, need_label)
         if not swipe_tabs(phone, *TAB_SWIPE):
             break                                        # end of the tab row
     return claimed
@@ -270,13 +344,15 @@ def swipe_tabs(phone, x_from, x_to):
     return vision.screen_diff(before, phone.screen(SHOP_TAB_DOTS), SHOP_TAB_DOTS) > 3
 
 
-def claim_free_chest(phone, log):
+def claim_free_chest(phone, log, need_label=False):
     """The open tab's free chest, in the header: a chest with its own red dot (labelled "Claimable"), or one
     labelled "Free" (Daily Deals). Some show a "Claimed" pop-up afterwards. Returns 1 if claimed, else 0."""
     for _ in range(5):                                   # the tab's content can take a few seconds to draw
         img = phone.screen()
         dots = vision.red_dots(img, SHOP_FREE_AREA)
-        label = None if dots else free_label(img)
+        label = free_label(img) if need_label or not dots else None
+        if need_label and not label:                     # Deals: a red dot alone isn't enough (Hall of Heroes...)
+            dots = []
         if dots or label:
             break
         time.sleep(0.8)
@@ -330,7 +406,12 @@ def open_tab(phone, name):
 def claim_glowing(phone, most=7):
     """Tap each glowing (claimable) item of the Free column until none glows. Returns how many."""
     for n in range(most):
-        item = glowing_item(phone.screen())
+        for _ in range(5 if n == 0 else 1):              # a freshly opened tab scrolls to today first: wait for it
+            item = glowing_item(phone.screen())
+            if item:
+                break
+            time.sleep(0.8)
+            phone.forget_screen()
         if not item:
             return n
         phone.tap_xy(*item)
@@ -344,7 +425,7 @@ def glowing_item(img):
     line along its top and another 110-160 px below it (white text on items is much shorter). Or None."""
     x1, y1, x2, y2 = FREE_COLUMN
     hsv = cv2.cvtColor(img[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
-    pale = (hsv[:, :, 1] < 90) & (hsv[:, :, 2] > 220)
+    pale = (hsv[:, :, 0] >= 18) & (hsv[:, :, 0] <= 40) & (hsv[:, :, 1] < 130) & (hsv[:, :, 2] > 190)   # pale yellow; it pulses
     lines = []
     for y in range(pale.shape[0]):
         edges = np.diff(np.concatenate([[0], pale[y].astype(np.int8), [0]]))
