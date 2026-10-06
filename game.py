@@ -191,21 +191,24 @@ class Kingshot(Task):
         return m
 
 
-def any_close_x(img, min_score=0.85):
-    """A pop-up's close X found by its white cross shape alone, whatever the colour behind it or its size:
-    (x, y) or None. Normal screens score <= 0.71 against it, real X buttons ~0.9."""
+def any_close_x(img, min_score=0.78):
+    """A pop-up's close X found by its cross shape alone, whatever its colours: light on dark or dark on light, any
+    hue, sizes 0.8-1.25x. Each pixel is compared with its surroundings (brighter / darker than the local average),
+    so no colour is assumed. (x, y) or None. Real X buttons score 0.83-0.95, normal screens <= 0.70."""
     part, (ox, oy) = vision.crop(img, POPUP_X_REGION)
-    white = _white(part)
-    tpl = _white(vision.load_template("close_x")[0])[6:-6, 6:-6]
+    tpl = _contrast_masks(vision.load_template("close_x")[0])[0][6:-6, 6:-6]
     best, at = 0.0, None
-    for scale in (0.8, 0.9, 1.0, 1.1, 1.25):
-        t = cv2.resize(tpl, None, fx=scale, fy=scale)
-        _, score, _, (x, y) = cv2.minMaxLoc(cv2.matchTemplate(white, t, cv2.TM_CCOEFF_NORMED))
-        if score > best:
-            best, at = score, (ox + x + t.shape[1] // 2, oy + y + t.shape[0] // 2)
+    for mask in _contrast_masks(part):
+        for scale in (0.8, 0.9, 1.0, 1.1, 1.25):
+            t = cv2.resize(tpl, None, fx=scale, fy=scale)
+            _, score, _, (x, y) = cv2.minMaxLoc(cv2.matchTemplate(mask, t, cv2.TM_CCOEFF_NORMED))
+            if score > best:
+                best, at = score, (ox + x + t.shape[1] // 2, oy + y + t.shape[0] // 2)
     return at if best >= min_score else None
 
 
-def _white(img):
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    return (((hsv[:, :, 1] < 70) & (hsv[:, :, 2] > 200)) * 255).astype(np.float32)
+def _contrast_masks(img):
+    """[pixels clearly brighter than their surroundings, pixels clearly darker] as 0/255 images."""
+    g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    local = cv2.blur(g, (45, 45))
+    return [((g - local > 15) * 255).astype(np.float32), ((local - g > 15) * 255).astype(np.float32)]
