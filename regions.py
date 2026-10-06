@@ -83,3 +83,4 @@ TRAIN_BUTTON = (0.5, 0.86, 0.85, 0.9)           # teal "Train" (reads "Speedups"
 TRAIN_QTY = (0.7, 0.8, 0.79, 0.82)              # quantity box (tap -> a text field with OK)
 TRAIN_TIMER = (0.2, 0.75, 0.8, 0.78)            # while training: "Training  10:36:26" (the status panel)
 TRAIN_QTY_FIELD = (0.8, 0.89, 0.95, 0.93)        # the quantity text field's "OK" (only while it is open)
+RESOURCE_PACK_ENTER = (0.08, 0.6, 0.5, 0.66)     # launch after an update: "Enter Game" (orange; "Download Now" is right)

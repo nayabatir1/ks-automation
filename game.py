@@ -19,6 +19,7 @@ from regions import (
     NAV_Q4,
     NAV_REGION,
     POPUP_X_REGION,
+    RESOURCE_PACK_ENTER,
     SESSION_TAKEN_TEXT,
     WELCOME_CONFIRM,
     WELCOME_TITLE,
@@ -143,9 +144,10 @@ class Kingshot(Task):
         Returns True if a pop-up was closed, False if the menu (or `also`) showed."""
         targets = [{"image": "close_x", "region": POPUP_X_REGION},       # pop-ups first
                    {"text": "Welcome back", "region": WELCOME_TITLE},
+                   {"text": "Enter Game", "region": RESOURCE_PACK_ENTER},   # after an update (resource pack box)
                    also or {"text": "Backpack", "region": NAV_REGION}]
         which = phone.wait_any(*targets, timeout=timeout)
-        if which == 2:
+        if which == 3:
             return False
         if closed >= max_popups:
             raise RuntimeError(f"still a pop-up after closing {max_popups}; something is off")
@@ -154,6 +156,10 @@ class Kingshot(Task):
             log.info("closing pop-up %d (X at %s, score %.2f)", closed + 1, m.center, m.score)
             phone.tap_xy(*m.center)
             self._wait_gone_quietly(phone, image="close_x", region=POPUP_X_REGION)
+        elif which == 2:   # "Resource pack downloading...": always Enter Game (the user's choice, not Download Now)
+            log.info("pop-up %d: resource pack -> Enter Game", closed + 1)
+            phone.tap_xy(*phone.last_match.center)
+            self._wait_gone_quietly(phone, text="Enter Game", region=RESOURCE_PACK_ENTER)
         else:
             log.info("pop-up %d: Welcome back (offline income) -> Confirm", closed + 1)
             phone.tap(text="Confirm", region=WELCOME_CONFIRM, timeout=5)
