@@ -247,7 +247,7 @@ def cassie_recruit(app, phone, log):
     """Town: Stable, Barracks, Range and Enlistment Office can each show a bubble with Cassie's picture; tap every
     one (instant, no pop-up). The first three stand together, so one stop often shows several bubbles."""
     view, tapped = app.town_from_launch(phone, log), 0
-    for name in ("Stable", "Barracks", "Range", "Enlistment Office"):
+    for name in ("Barracks", "Enlistment Office"):
         x, y = go_to_building(phone, log, name, view=view)
         view = (TOWN[name][0] - x, TOWN[name][1] + LABEL_TO_BUILDING - y)   # where the view is now
         for _ in range(4):
@@ -257,7 +257,7 @@ def cassie_recruit(app, phone, log):
                 break
             phone.tap_xy(*m.center)
             tapped += 1
-            time.sleep(1)
+            time.sleep(5)
     app.town_view = None
     log.info("cassie: %d bubble(s) tapped", tapped)
 
