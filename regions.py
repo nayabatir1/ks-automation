@@ -46,7 +46,7 @@ SHOP_TAB_ROW_Y = 330                            # y to tap / swipe the tab row (
 SHOP_FREE_AREA = (0, 0.14, 1, 0.35)             # content header: the free chest ("Claimable" / "Free"), above any ₹ button
 VIP_BADGE = (0.75, 0.07, 1, 0.12)               # Q1: orange V badge before "VIP 9" (the number changes; templates/vip_badge.png)
 VIP_TITLE = (0.1, 0.04, 0.4, 0.09)              # VIP screen title "VIP"
-VIP_XP_CHEST = (0.65, 0.17, 1, 0.24)            # VIP screen: daily sign-in VIP XP chest (under Shop); red dot = claimable
+VIP_XP_CHEST = (0.80, 0.20, 1, 0.24)            # VIP screen: daily sign-in VIP XP chest (under Shop); red dot = claimable
 VIP_BUNDLE_CLAIM = (0.6, 0.66, 0.95, 0.74)      # VIP screen: "VIP N Daily Free Bundle" green Claim (Special Pack below = ₹: never)
 POPUP_CONTINUE = (0.1, 0.9, 0.9, 0.97)          # reward pop-ups: "Click to continue" / "Tap anywhere to exit"
 DEALS_LABEL = (0.85, 0.2, 1, 0.25)              # Q1: "Deals" under its gift icon
