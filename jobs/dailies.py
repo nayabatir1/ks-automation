@@ -4,8 +4,11 @@ Starts on the city screen or world map (bottom menu visible, no pop-up) — game
 open the game and close all pop-ups first; after_job backs out to where it started.
 The Q1 icons (gems, VIP, Events, Deals, Sign-in, ...) show on both the town and the world map.
 """
+from __future__ import annotations
+
 import re
 import time
+from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -49,6 +52,13 @@ from regions import (
 )
 from town import LABEL_TO_BUILDING, MAP_AREA, TOWN, go_to_building
 
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from core.phone import Phone
+    from core.vision import Image, Region
+    from game import Kingshot
+
 TAB_SWIPE = (900, 200)          # x from / to: one swipe shows the next ~2.5 tabs
 MAX_TAB_PAGES = 8
 BUBBLE_SCALES = (0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.1)   # bubbles are drawn smaller near the town edge
@@ -59,13 +69,13 @@ BLANK_SPOT_PX = (540, 300)      # dim area above reward pop-ups (no buttons behi
 
 
 @job(schedule=At("00:30", tz="UTC"), priority=100, timeout=1800)   # 6am IST, after troops_training; merchant ~12 min
-def dailies(app, phone, log):
+def dailies(app: Kingshot, phone: Phone, log: Logger):
     """The parts below, in order; each starts and ends on the city / world map.
     Test one part: run.py --job dailies --part vip   (several: --part gems,deals; all: leave --part out)"""
     run_parts(app, phone, log, PARTS)
 
 
-def gems(app, phone, log):
+def gems(app: Kingshot, phone: Phone, log: Logger):
     """Gems button (cart + gem count, top right) -> Top-up Center: every tab with a red dot has a free chest.
     !! Real-money shop: never tap a ₹ price or "TOP UP". Only the free chest in each tab's header is tapped."""
     app.tap_on_main(phone, log, image="gems_shop", region=GEMS_SHOP)
@@ -76,7 +86,7 @@ def gems(app, phone, log):
     back_to_main(phone)
 
 
-def vip(app, phone, log):
+def vip(app: Kingshot, phone: Phone, log: Logger):
     """VIP (orange V badge; the level number changes) -> VIP screen: the daily sign-in VIP XP chest (red dot) and
     the green Claim of "VIP N Daily Free Bundle". !! The "+" by the XP bar, Shop and the ₹ Special Pack: never."""
     app.tap_on_main(phone, log, image="vip_badge", region=VIP_BADGE, then={"text": "VIP", "region": VIP_TITLE})
@@ -96,7 +106,7 @@ def vip(app, phone, log):
     back_to_main(phone)
 
 
-def deals(app, phone, log):
+def deals(app: Kingshot, phone: Phone, log: Logger):
     """Deals (gift icon): only two tabs give free things, "Sign-in & Earn It" (a reward per day) and "Hero Rally"
     (rewards unlock as tasks earn points). Claim the glowing items of their Free column.
     !! Never the Epic / Path of Honor column, Unlock, Purchase Level, "+" or any ₹ button."""
@@ -114,7 +124,7 @@ def deals(app, phone, log):
     back_to_main(phone)
 
 
-def bank(phone, log):
+def bank(phone: Phone, log: Logger) -> None:
     """Deals > Bank, the Daily 5% box: Withdraw once its day is up (deposit + 5%), then deposit again (the dialog
     starts at the maximum). "In Deposit" = still running. !! Never "TOP UP NOW" (real money) or the other boxes."""
     time.sleep(1)
@@ -142,12 +152,12 @@ def bank(phone, log):
     log.info("bank: deposited (the maximum)")
 
 
-def button_centre(region):
+def button_centre(region: Region) -> tuple[int, int]:
     x1, y1, x2, y2 = region
     return int((x1 + x2) / 2 * 1080), int((y1 + y2) / 2 * 2340)
 
 
-def nomadic_merchant(app, phone, log):
+def nomadic_merchant(app: Kingshot, phone: Phone, log: Logger):
     """Shop (bottom menu) -> Nomadic Merchant: buy every box priced in bread / wood / stone / iron until all 6 are
     priced in gems, then Free Refresh and again, until the refresh isn't free. The VIP XP box (yellow V badge) is
     always bought, also for gems (the user's rule).
@@ -195,7 +205,7 @@ def nomadic_merchant(app, phone, log):
     back_to_main(phone)
 
 
-def buy_vip_xp(phone, log, xy):
+def buy_vip_xp(phone: Phone, log: Logger, xy: tuple[int, int]) -> int:
     """Gem buys open a "Buy" dialog: check it is VIP XP, then tap its orange gem button. Returns 1 if bought."""
     phone.tap_xy(*xy)
     try:
@@ -215,18 +225,18 @@ def buy_vip_xp(phone, log, xy):
     return 1
 
 
-def box_region(xy):
+def box_region(xy: tuple[int, int]) -> Region:
     """Screen rows of one box, its icon to its price bar (for a quick strip screenshot)."""
     return 0, (xy[1] - 340) / 2340, 1, (xy[1] + 32) / 2340
 
 
-def vip_xp(img, xy):
+def vip_xp(img: Image, xy: tuple[int, int]) -> bool:
     """Is the item of the box with this price bar VIP XP (yellow V badge, templates/merchant_vip_xp.png)?"""
     x, y = xy
     return vision.find_image(img, "merchant_vip_xp", (x - 160, y - 330, x + 160, y - 50), threshold=0.8) is not None
 
 
-def price_bar(img, xy):
+def price_bar(img: Image, xy: tuple[int, int]) -> bool:
     """Is a merchant price bar really there (cream background)? Guards against tapping when something covers it."""
     x, y = xy
     hsv = cv2.cvtColor(img[y - 30:y + 30, x - 160:x + 160], cv2.COLOR_BGR2HSV)
@@ -235,15 +245,15 @@ def price_bar(img, xy):
     return 0.35 <= cream.mean() <= 0.75
 
 
-def gem_price(img, xy):
+def gem_price(img: Image, xy: tuple[int, int]) -> bool:
     """Is this price bar in gems (a blue diamond before the number)?"""
     x, y = xy
     hsv = cv2.cvtColor(img[y - 30:y + 30, x - 160:x + 160], cv2.COLOR_BGR2HSV)
     blue = (hsv[:, :, 0] >= 95) & (hsv[:, :, 0] <= 115) & (hsv[:, :, 1] > 120) & (hsv[:, :, 2] > 150)
-    return blue.sum() > 200
+    return bool(blue.sum() > 200)
 
 
-def cassie_recruit(app, phone, log):
+def cassie_recruit(app: Kingshot, phone: Phone, log: Logger):
     """Town: Stable, Barracks, Range and Enlistment Office can each show a bubble with Cassie's picture; tap every
     one (instant, no pop-up). The first three stand together, so one stop often shows several bubbles."""
     view, tapped = app.town_from_launch(phone, log), 0
@@ -262,7 +272,7 @@ def cassie_recruit(app, phone, log):
     log.info("cassie: %d bubble(s) tapped", tapped)
 
 
-def truegold_crucible(app, phone, log):
+def truegold_crucible(app: Kingshot, phone: Phone, log: Logger):
     """World map -> side panel (">" tab, left middle) -> scroll to "Truegold Crucible" -> Truegold Crucible screen."""
     if phone.exists(text="World", region=NAV_REGION):            # on the town: the button names the world map
         phone.tap(text="World", region=NAV_REGION)
@@ -292,7 +302,7 @@ def truegold_crucible(app, phone, log):
     back_to_main(phone)
 
 
-def refines_left(phone, tries=3):
+def refines_left(phone: Phone, tries: int = 3) -> int | None:
     """N from "Remaining today: N" (OCR sometimes puts the N on its own line), or None if unreadable."""
     for _ in range(tries):
         m = re.search(r"today\D*(\d+)|^(\d+)\b", " ".join(phone.read_text(CRUCIBLE_REMAINING).split()), re.IGNORECASE)
@@ -306,13 +316,13 @@ PARTS = {"gems": gems, "vip": vip, "deals": deals, "nomadic_merchant": nomadic_m
          "cassie_recruit": cassie_recruit, "truegold_crucible": truegold_crucible}
 
 
-def back_to_main(phone):
+def back_to_main(phone: Phone) -> None:
     """One Back from a Q1 icon's screen -> the city / world map."""
     phone.back()
     phone.wait_for(text="Backpack", region=NAV_REGION, timeout=10)
 
 
-def claim_shop_tabs(phone, log, need_label=False):
+def claim_shop_tabs(phone: Phone, log: Logger, need_label: bool = False) -> int:
     """Visit each red-dot tab (names and pictures change) and claim its free chest. Returns how many."""
     for _ in range(3):                                   # tab row back to its start
         if not swipe_tabs(phone, TAB_SWIPE[1], TAB_SWIPE[0]):
@@ -335,7 +345,7 @@ def claim_shop_tabs(phone, log, need_label=False):
     return claimed
 
 
-def swipe_tabs(phone, x_from, x_to):
+def swipe_tabs(phone: Phone, x_from: int, x_to: int) -> bool:
     """Swipe the tab row; False if it didn't move (at its end)."""
     before = phone.screen(SHOP_TAB_DOTS)
     phone.swipe(x_from, SHOP_TAB_ROW_Y, x_to, SHOP_TAB_ROW_Y, ms=600)
@@ -344,7 +354,7 @@ def swipe_tabs(phone, x_from, x_to):
     return vision.screen_diff(before, phone.screen(SHOP_TAB_DOTS), SHOP_TAB_DOTS) > 3
 
 
-def claim_free_chest(phone, log, need_label=False):
+def claim_free_chest(phone: Phone, log: Logger, need_label: bool = False) -> int:
     """The open tab's free chest, in the header: a chest with its own red dot (labelled "Claimable"), or one
     labelled "Free" (Daily Deals). Some show a "Claimed" pop-up afterwards. Returns 1 if claimed, else 0."""
     for _ in range(5):                                   # the tab's content can take a few seconds to draw
@@ -370,7 +380,7 @@ def claim_free_chest(phone, log, need_label=False):
     return 1
 
 
-def dismiss_popup(phone, wait=10):
+def dismiss_popup(phone: Phone, wait: float = 10) -> None:
     """Close a reward pop-up ("Click to continue" / "Tap anywhere to exit") by tapping the dim area above it;
     taps during its opening animation are ignored, so tap until it's gone. No pop-up within `wait` s: nothing to do."""
     if not phone.exists(text=re.compile(r"Click to continue|Tap anywhere", re.IGNORECASE), region=POPUP_CONTINUE, timeout=wait):
@@ -383,7 +393,7 @@ def dismiss_popup(phone, wait=10):
     phone.forget_screen()
 
 
-def open_tab(phone, name):
+def open_tab(phone: Phone, name: str) -> bool:
     """Swipe the tab row until a tab whose name contains `name` shows, and tap it. False if there's none.
     The open tab shows no name in the row, only its big title."""
     if phone.exists(text=name, region=TAB_TITLE):
@@ -403,7 +413,7 @@ def open_tab(phone, name):
     return False
 
 
-def claim_glowing(phone, most=7):
+def claim_glowing(phone: Phone, most: int = 7) -> int:
     """Tap each glowing (claimable) item of the Free column until none glows. Returns how many."""
     for n in range(most):
         for _ in range(5 if n == 0 else 1):              # a freshly opened tab scrolls to today first: wait for it
@@ -420,7 +430,7 @@ def claim_glowing(phone, most=7):
     return most
 
 
-def glowing_item(img):
+def glowing_item(img: Image) -> tuple[int, int] | None:
     """Centre of a claimable item in the Free column: it has a pale glowing frame, i.e. a 100-175 px long pale
     line along its top and another 110-160 px below it (white text on items is much shorter). Or None."""
     x1, y1, x2, y2 = FREE_COLUMN
@@ -439,7 +449,7 @@ def glowing_item(img):
     return None
 
 
-def free_label(img):
+def free_label(img: Image) -> tuple[float, float] | None:
     """(x, y) of a white "Claimable" / "Free" label in the tab header, or None (normal OCR misses this text)."""
     part, (ox, oy) = vision.crop(img, SHOP_FREE_AREA)
     hsv = cv2.cvtColor(part, cv2.COLOR_BGR2HSV)

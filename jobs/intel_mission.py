@@ -9,8 +9,11 @@ every open pin is done (new missions can appear, so it goes round until none are
 Pins are told apart by their white icon (templates/intel_pin_*.png), whatever the pin's colour.
 Starts on the city screen or world map; after_job backs out to where it started.
 """
+from __future__ import annotations
+
 import re
 import time
+from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -35,6 +38,13 @@ from regions import (
     SCREEN_TITLE,
 )
 
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from core.phone import Phone
+    from core.vision import Image
+    from game import Kingshot
+
 PIN_KINDS = ("tent", "swords", "bear", "lion")
 ACTIONS = {"tent": "Rescue", "swords": "Conquer", "bear": "Attack", "lion": "Attack"}
 BUTTON_HUES = {"tent": (40, 75), "swords": (80, 100), "bear": (5, 22), "lion": (5, 22)}
@@ -45,7 +55,7 @@ DEPLOY_TAP = (822, 2210)  # centre of the Deploy button
 
 
 @job(schedule=At("00:30", "12:00", tz="UTC"), priority=110, timeout=1200)   # 6am + 5:30pm IST, last
-def intel_mission(app, phone, log):
+def intel_mission(app: Kingshot, phone: Phone, log: Logger):
     if phone.exists(text="World", region=NAV_REGION):            # on the town: the button names the world map
         phone.tap(text="World", region=NAV_REGION)
         phone.wait_for(text="Town", region=NAV_REGION, timeout=15)
@@ -83,19 +93,19 @@ def intel_mission(app, phone, log):
     phone.back()                                         # Intel Mission -> world map
 
 
-def open_intel(app, phone, log):
+def open_intel(app: Kingshot, phone: Phone, log: Logger):
     app.tap_on_main(phone, log, image="compass_button", region=COMPASS_BUTTON)
     phone.wait_for(text="Refreshes In", region=INTEL_REFRESH, timeout=20)   # the mission map takes a while to load
     time.sleep(1)
     phone.forget_screen()
 
 
-def read_meat(phone):
+def read_meat(phone: Phone) -> int | None:
     digits = re.sub(r"\D", "", phone.read_text(INTEL_MEAT))
     return int(digits) if digits else None
 
 
-def pins(img):
+def pins(img: Image) -> tuple[list[tuple[str, int, int]], list[tuple[str, int, int]]]:
     """([(kind, x, y)] open pins, [(kind, x, y)] finished pins with a green tick), top to bottom.
     Boss pins aren't matched."""
     part, (ox, oy) = crop(img, INTEL_MAP)
@@ -116,13 +126,13 @@ def pins(img):
     return sorted(found, key=lambda p: p[2]), sorted(finished, key=lambda p: p[2])
 
 
-def ticked(img, x, y):
+def ticked(img: Image, x: int, y: int) -> bool:
     """A finished pin has a green tick at its head's top right."""
     hsv = cv2.cvtColor(img[max(0, y - 55):y - 5, x + 10:x + 60], cv2.COLOR_BGR2HSV)
-    return ((hsv[:, :, 0] >= 45) & (hsv[:, :, 0] <= 85) & (hsv[:, :, 1] > 120) & (hsv[:, :, 2] > 150)).sum() > 80
+    return bool(((hsv[:, :, 0] >= 45) & (hsv[:, :, 0] <= 85) & (hsv[:, :, 1] > 120) & (hsv[:, :, 2] > 150)).sum() > 80)
 
 
-def do_mission(phone, log, kind, x, y):
+def do_mission(phone: Phone, log: Logger, kind: str, x: int, y: int) -> bool:
     """One mission from its pin. Returns False if it couldn't be started (then the pin is skipped)."""
     phone.tap_xy(x, y)
     try:
@@ -166,7 +176,7 @@ def do_mission(phone, log, kind, x, y):
     return True
 
 
-def action_button(img, kind):
+def action_button(img: Image, kind: str) -> tuple[int, int] | None:
     """Centre of the mission box's button, found by its colour (its white lettering doesn't always OCR):
     green Rescue (tent), teal Conquer (swords), orange Attack (bear / lion). None if it isn't there."""
     lo, hi = BUTTON_HUES[kind]
@@ -179,7 +189,7 @@ def action_button(img, kind):
     return ox + int(np.median(xs)), oy + int(np.median(ys))
 
 
-def tap_to_exit(phone, wait=0):
+def tap_to_exit(phone: Phone, wait: float = 0) -> None:
     """Reward pop-up: tap the dim area until "Tap anywhere to exit" is gone (taps during the animation are lost)."""
     if wait and not phone.exists(text="Tap anywhere", region=POPUP_EXIT, timeout=wait):
         return
@@ -189,7 +199,7 @@ def tap_to_exit(phone, wait=0):
             return
 
 
-def back_to_world(phone):
+def back_to_world(phone: Phone) -> None:
     """Back to the world map (bottom menu says "Town"), whatever is open."""
     for _ in range(4):
         if phone.exists(text="Backpack", region=NAV_REGION, timeout=2):

@@ -9,9 +9,10 @@ time) so each job has exactly one entry; "what's next" is just these sorted by n
 import json
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 
 
-def _parse(ts):
+def _parse(ts: str | None) -> datetime | None:
     if not ts:
         return None
     dt = datetime.fromisoformat(ts)
@@ -19,20 +20,20 @@ def _parse(ts):
 
 
 class State:
-    def __init__(self, path):
+    def __init__(self, path: Path) -> None:
         self.path = path
         try:
             self.data = json.loads(path.read_text())
         except (FileNotFoundError, json.JSONDecodeError):
             self.data = {}
 
-    def last_run(self, name) -> datetime | None:
+    def last_run(self, name: str) -> datetime | None:
         return _parse(self.data.get(name, {}).get("last_run"))
 
-    def next_at(self, name) -> datetime | None:
+    def next_at(self, name: str) -> datetime | None:
         return _parse(self.data.get(name, {}).get("next_at"))
 
-    def record(self, name, started: datetime, status: str, error: str | None = None, seconds=None,
+    def record(self, name: str, started: datetime, status: str, error: str | None = None, seconds: float | None = None,
                next_at: datetime | None = None):
         entry = {
             "last_run": started.astimezone(timezone.utc).isoformat(timespec="seconds"),

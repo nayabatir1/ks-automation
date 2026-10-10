@@ -23,9 +23,11 @@ import logging
 import signal
 import sys
 import time
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import config
@@ -34,6 +36,7 @@ from core.loader import load_tasks
 from core.phone import Phone, PhoneError, device_state
 from core.schedule import utcnow
 from core.state import State
+from core.task import Job, Task
 
 log = logging.getLogger("runner")
 IST = ZoneInfo("Asia/Kolkata")
@@ -43,7 +46,7 @@ class TaskTimeout(BaseException):  # BaseException so a task's own `except Excep
     pass
 
 
-def setup_logging(verbose):
+def setup_logging(verbose: bool) -> None:
     config.LOG_DIR.mkdir(exist_ok=True)
     fmt = logging.Formatter("%(asctime)sZ %(levelname)-7s %(name)s: %(message)s", "%Y-%m-%d %H:%M:%S")
     fmt.converter = time.gmtime   # log times in UTC, like state.json
@@ -69,7 +72,7 @@ def acquire_lock():
     return fh
 
 
-def save_failure(phone, name):
+def save_failure(phone: Phone, name: str) -> None:
     """Screenshot + all OCR text with coordinates, so you can debug from the terminal. Old ones are pruned."""
     config.FAILURE_DIR.mkdir(parents=True, exist_ok=True)
     base = f"{config.FAILURE_DIR}/{name}_{utcnow():%Y%m%d-%H%M%S}"   # not with_suffix: names contain dots
@@ -97,7 +100,7 @@ def prune_failures():
                 f.unlink(missing_ok=True)
 
 
-def check_session_taken(phone, task, name):
+def check_session_taken(phone: Phone, task: Task, name: str) -> bool:
     """After a failure: is the account in use on another device (you're playing)? Then pause and don't fight
     for the session — reconnecting would kick you off. The jobs stay due and run after the pause."""
     try:
@@ -112,7 +115,7 @@ def check_session_taken(phone, task, name):
     return taken
 
 
-def phone_connected(manual):
+def phone_connected(manual: bool) -> bool:
     """First thing every run: is the phone there? If not, no job runs and no job state changes, so everything
     due simply runs once it's back. Timer runs log this once when the phone goes away and once when it returns."""
     state = device_state(config.DEVICE_SERIAL)
@@ -130,11 +133,11 @@ def phone_connected(manual):
     return False
 
 
-def _on_alarm(signum, frame):
+def _on_alarm(signum: int, frame: object) -> None:
     raise TaskTimeout()
 
 
-def call_with_timeout(seconds, fn, label):
+def call_with_timeout(seconds: int, fn: Callable[[], Any], label: str) -> tuple[str, str | None, Any]:
     """Run fn() with a hard time limit. Returns (status, error, result)."""
     signal.signal(signal.SIGALRM, _on_alarm)
     signal.alarm(seconds)
@@ -152,7 +155,7 @@ def call_with_timeout(seconds, fn, label):
         signal.alarm(0)   # before any cleanup, so the alarm can't fire inside it
 
 
-def close_app(phone, task):
+def close_app(phone: Phone, task: Task) -> None:
     if task.package and task.close_app:
         try:
             phone.close(task.package)
@@ -160,7 +163,7 @@ def close_app(phone, task):
             log.warning("Could not close %s: %s", task.package, e)
 
 
-def open_app(phone, task, tlog):
+def open_app(phone: Phone, task: Task, tlog: logging.Logger) -> None:
     phone.wake()  # again per task: a long previous task may have let the screen time out
     if config.DISABLE_KEYBOARDS:
         phone.disable_keyboards()
@@ -174,7 +177,7 @@ def open_app(phone, task, tlog):
 
 
 # ------------------------------------------------------------------ simple tasks
-def run_simple(phone, name, task, state):
+def run_simple(phone: Phone, name: str, task: Task, state: State) -> bool:
     tlog = logging.getLogger(f"task.{name}")
     timeout = task.timeout or config.DEFAULT_TASK_TIMEOUT
     started, t0 = utcnow(), time.monotonic()
@@ -200,30 +203,33 @@ def run_simple(phone, name, task, state):
 
 
 # ------------------------------------------------------------------ @job tasks
-def first_run(j, now):
+def first_run(j: Job, now: datetime) -> datetime:
     """When a job that never ran is first due: straight away, or its first slot if it has a fixed schedule."""
     if j.schedule and not j.schedule.is_due(now, None):
-        return j.schedule.next_slot(now)
+        slot = j.schedule.next_slot(now)
+        if slot:
+            return slot
     return datetime.min.replace(tzinfo=timezone.utc)
 
 
-def due_jobs(name, task, state, now, ahead=timedelta(0)):
+def due_jobs(name: str, task: Task, state: State, now: datetime, ahead: timedelta = timedelta(0)) -> list[Job]:
     """Enabled jobs whose next_at has come, in run order. Never run = due now, or at its first scheduled slot."""
-    def when(j):
+    def when(j: Job) -> datetime:
         return state.next_at(f"{name}.{j.name}") or first_run(j, now)
     out = [j for j in task.job_list() if j.enabled and when(j) <= now + ahead]
     return sorted(out, key=lambda j: (j.priority, when(j)))
 
 
-def retry_at(job):
+def retry_at(job: Job) -> datetime:
     """After a failure (the game didn't open / log in, or the job failed): try again after retry_minutes, also for
     a job with fixed times (the only time a job runs outside its schedule). Its schedule never moves: a retry is
     never later than the next slot, and after a run that went well the next run is the next slot again."""
     retry = utcnow() + timedelta(minutes=job.retry_minutes)
-    return min(retry, job.schedule.next_slot(utcnow())) if job.schedule else retry
+    slot = job.schedule.next_slot(utcnow()) if job.schedule else None
+    return min(retry, slot) if slot else retry
 
 
-def next_time(job, result):
+def next_time(job: Job, result: object) -> datetime:
     """What a job returned -> when it may run next (aware datetime)."""
     now = utcnow()
     if isinstance(result, timedelta):
@@ -232,8 +238,9 @@ def next_time(job, result):
         return result if result.tzinfo else result.replace(tzinfo=ZoneInfo(config.SCHEDULE_TZ))
     if result is not None:
         raise TypeError(f"job {job.name} returned {result!r}; return a timedelta, a datetime or None")
-    if job.schedule:
-        return job.schedule.next_slot(now)
+    slot = job.schedule.next_slot(now) if job.schedule else None
+    if slot:
+        return slot
     log.warning("job %s returned no next time and has no schedule; retrying in %s min",
                 job.name, job.retry_minutes)
     return now + timedelta(minutes=job.retry_minutes)
@@ -243,7 +250,7 @@ HAND_PAUSE = "paused by hand"
 _hand_run = False           # a --job run while paused by hand: the pause doesn't stop it (it still stops timer runs)
 
 
-def run_jobs(phone, name, task, state, jobs, wait=True):
+def run_jobs(phone: Phone, name: str, task: Task, state: State, jobs: list[Job], wait: bool = True) -> bool:
     """One app session: open the app and run the due jobs. If the next job (any job) is due within
     session_wait_seconds, keep the app open and run it too; otherwise close the app (max_session_minutes cap)."""
     log.info("=== %s: %d job(s): %s", name, len(jobs), ", ".join(j.name for j in jobs))
@@ -276,7 +283,8 @@ def run_jobs(phone, name, task, state, jobs, wait=True):
     return ok
 
 
-def run_batch(phone, name, task, state, jobs, tlog):
+def run_batch(phone: Phone, name: str, task: Task, state: State, jobs: list[Job],
+              tlog: logging.Logger) -> tuple[bool, bool]:
     """Run these jobs one after another. Returns (all ok, app could not be recovered)."""
     ok = True
     for i, j in enumerate(jobs):
@@ -317,7 +325,7 @@ def run_batch(phone, name, task, state, jobs, tlog):
     return ok, False
 
 
-def wait_for_next_jobs(name, task, state, session_end):
+def wait_for_next_jobs(name: str, task: Task, state: State, session_end: float) -> list[Job]:
     """Jobs (any of them) due within session_wait_seconds: sleep until the first is due and return what's due
     then. Returns [] (-> the app gets closed) when nothing is due that soon or the session has run long enough."""
     soon = due_jobs(name, task, state, utcnow(), timedelta(seconds=task.session_wait_seconds))
@@ -336,7 +344,7 @@ def wait_for_next_jobs(name, task, state, session_end):
 
 
 # ------------------------------------------------------------------ what's due
-def is_due(name, task, state, now):
+def is_due(name: str, task: Task, state: State, now: datetime) -> bool:
     if not task.enabled:
         return False
     if task.job_list():
@@ -344,30 +352,33 @@ def is_due(name, task, state, now):
     return bool(task.schedule and task.schedule.is_due(now, state.last_run(name)))
 
 
-def _fmt(dt, tz):
+def _fmt(dt: datetime | None, tz: ZoneInfo | timezone) -> str:
     return dt.astimezone(tz).strftime("%m-%d %H:%M") if dt else "-"
 
 
-def _fmt_both(dt):
+def _fmt_both(dt: datetime | None) -> str:
     return f"{_fmt(dt, IST)} IST / {_fmt(dt, timezone.utc)} UTC" if dt else "-"
 
 
-def _row(label, on, pri, sched, nxt, last, status):
+def _row(label: str, on: str, pri: int, sched: str, nxt: datetime | None, last: datetime | None,
+         status: str) -> None:
     print(f"{label:30} {on:3} {pri:>3}  {sched:30} {_fmt(nxt, IST):11}  {_fmt(nxt, timezone.utc):11}  "
           f"{_fmt(last, timezone.utc):11}  {status}")
 
 
-def _status(entry):
+def _status(entry: dict[str, Any] | None) -> str:
+    if not entry:
+        return "-"
     s = entry.get("status", "-")
     return s + (f" ({entry['error'][:60]})" if entry.get("error") else "")
 
 
-def job_next(name, j, state, now):
+def job_next(name: str, j: Job, state: State, now: datetime) -> datetime | None:
     """Next run of a job for display: its next_at, or (never ran) now / its first scheduled slot."""
     return state.next_at(f"{name}.{j.name}") or max(now, first_run(j, now))
 
 
-def print_list(tasks, state, now):
+def print_list(tasks: dict[str, Task], state: State, now: datetime) -> None:
     print(f"{'TASK / .job':30} {'ON':3} {'PRI':>3}  {'SCHEDULE':30} {'NEXT IST':11}  {'NEXT UTC':11}  "
           f"{'LAST RUN UTC':11}  STATUS")
     for name, t in tasks.items():
@@ -389,7 +400,7 @@ def print_list(tasks, state, now):
     print(f"\nnow: {_fmt_both(now)}")
 
 
-def print_timeline(tasks, state, now):
+def print_timeline(tasks: dict[str, Task], state: State, now: datetime) -> None:
     """Everything enabled, in the order it will run."""
     items = []
     for name, t in tasks.items():
@@ -410,7 +421,7 @@ def print_timeline(tasks, state, now):
 
 
 # ------------------------------------------------------------------ main
-def set_pause(args):
+def set_pause(args: argparse.Namespace) -> int:
     if args.resume:
         log.info("Resumed" if pause.resume() else "Was not paused")
         return 0

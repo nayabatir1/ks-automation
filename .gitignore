@@ -10,3 +10,4 @@ __pycache__/
 pause.json
 scroll_memory.json
 temp/
+test*

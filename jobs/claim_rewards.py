@@ -3,7 +3,10 @@ Parts: mail_rewards, alliance_rewards, help_members.
 Test one part: run.py --job claim_rewards --part alliance_rewards
 Starts on the city screen or world map; after_job backs out to where it started.
 """
+from __future__ import annotations
+
 import time
+from typing import TYPE_CHECKING
 
 import cv2
 
@@ -26,14 +29,21 @@ from regions import (
     SCREEN_TITLE,
 )
 
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from core.phone import Phone
+    from core.vision import Image
+    from game import Kingshot
+
 
 @job(schedule=At("00:30", "12:00", tz="UTC"), priority=115)   # 6am + 5:30pm IST, right after intel_mission (110)
-def claim_rewards(app, phone, log):
+def claim_rewards(app: Kingshot, phone: Phone, log: Logger):
     run_parts(app, phone, log, {"mail_rewards": mail_rewards, "alliance_rewards": alliance_rewards,
                                 "help_members": help_members})
 
 
-def mail_rewards(app, phone, log):
+def mail_rewards(app: Kingshot, phone: Phone, log: Logger):
     """Mail (envelope, bottom right) -> on the Alliance, System and Reports tabs: "Read & Claim All", then close the
     Rewards pop-up. Wars and Starred are left alone. !! Never "Delete Read"."""
     app.tap_on_main(phone, log, image="mail_button", region=MAIL_BUTTON)
@@ -54,7 +64,7 @@ def mail_rewards(app, phone, log):
     phone.back()                                         # Mail -> city / world map
 
 
-def alliance_rewards(app, phone, log):
+def alliance_rewards(app: Kingshot, phone: Phone, log: Logger):
     """Alliance (bottom menu) -> Chests: "Claim All" on the Loot Chest and Alliance Gift tabs (found by its text: it
     sits in a different place on each tab), then open the big chest while it glows (its badge number changes, so
     the glow decides). !! Never "Go" (shops) or the anonymous-gift checkbox."""
@@ -87,7 +97,7 @@ def alliance_rewards(app, phone, log):
     phone.back()                                         # Alliance -> city / world map
 
 
-def help_members(app, phone, log):
+def help_members(app: Kingshot, phone: Phone, log: Logger):
     """Alliance -> Help -> "Help All" (helps every member's request; earns alliance tokens). Nothing to do when the
     button isn't there (nobody left to help). !! Never "View" (Auto-Help is a paid monthly card)."""
     open_alliance(app, phone, log)
@@ -103,12 +113,12 @@ def help_members(app, phone, log):
     phone.back()                                         # Alliance -> city / world map
 
 
-def open_alliance(app, phone, log):
+def open_alliance(app: Kingshot, phone: Phone, log: Logger):
     app.tap_on_main(phone, log, text="Alliance", region=NAV_Q4)
     phone.wait_for(text="Alliance", region=ALLIANCE_TITLE, timeout=10)
 
 
-def chest_glowing(img):
+def chest_glowing(img: Image) -> bool:
     """The big chest can be opened: its lid is open with bright light (glowing ~6,100-6,700 white px; shut ~2,900)."""
     x1, y1, x2, y2 = BIG_CHEST
     hsv = cv2.cvtColor(img[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)

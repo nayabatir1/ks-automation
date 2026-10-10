@@ -16,19 +16,29 @@ A failed job is retried after retry_minutes. A job that never ran is due straigh
 
 (A Task can also be a simple one-off with run() and schedule=; the runner still supports that.)
 """
+from __future__ import annotations
+
 import importlib
 import inspect
 import logging
 import pkgutil
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from core.phone import Phone
+    from core.schedule import Schedule
 
 log = logging.getLogger("task")
 
 
-def job(schedule=None, *, priority=100, timeout=None, retry_minutes=30, enabled=True):
+def job(schedule: Schedule | None = None, *, priority: int = 100, timeout: int | None = None, retry_minutes: int = 30,
+        enabled: bool = True) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Mark a function in a jobs/ file (or a Task method) as a job. See the module docstring."""
-    def deco(func):
+    def deco(func: Any) -> Any:
         func._job = {"schedule": schedule, "priority": priority, "timeout": timeout,
                      "retry_minutes": retry_minutes, "enabled": enabled}
         return func
@@ -38,8 +48,8 @@ def job(schedule=None, *, priority=100, timeout=None, retry_minutes=30, enabled=
 @dataclass
 class Job:
     name: str
-    func: object
-    schedule: object
+    func: Callable[..., Any]
+    schedule: Schedule | None
     priority: int
     timeout: int | None
     retry_minutes: int
@@ -65,13 +75,13 @@ class Task:
     # Force-stop the app after the task (also after a failure).
     close_app: bool = True
     # run.py --part: only these parts of a job made of parts (e.g. jobs/dailies.py); None = all of them.
-    parts: list | None = None
+    parts: list[str] | None = None
     # If the app is already in the foreground, keep using it instead of restarting it.
     # The runner sets self.app_was_open before on_open() so it can skip the loading screens.
     reuse_open_app: bool = False
     app_was_open: bool = False
     # Set by the runner before each job: the next run time that job had stored (None if never run).
-    previous_next_at = None
+    previous_next_at: datetime | None = None
     # @job tasks: after the due jobs, the app stays open only if the next job (any job, or the same one again)
     # is due within this many seconds; otherwise it is closed. A session lasts at most max_session_minutes.
     session_wait_seconds: int = 10
@@ -83,18 +93,18 @@ class Task:
 
     # ------------------------------------------------------------------ hooks (the runner calls these)
     # Every session:  launch app -> on_open() -> [before_job() -> job -> after_job()] ... -> close app (always)
-    def on_open(self, phone, log):
+    def on_open(self, phone: Phone, log: logging.Logger) -> None:
         """Right after every app launch (also after a crash-restart): wait for loading, clear pop-ups.
         Default: nothing. Override per app."""
 
-    def before_job(self, phone, log):
+    def before_job(self, phone: Phone, log: logging.Logger) -> None:
         """Before each job (and before run()): make sure the app is on its main screen.
         Default: nothing. Override per app."""
 
-    def after_job(self, phone, log):
+    def after_job(self, phone: Phone, log: logging.Logger) -> None:
         """After each job that went well: leave the job's pages. Default: nothing. Override per app."""
 
-    def run(self, phone, log):
+    def run(self, phone: Phone, log: logging.Logger) -> Any:
         """Simple tasks: do the work. The phone is awake and the app is already open in the foreground.
 
         phone: core.phone.Phone   (wait_for, tap, wait_any, read_text, ... — see core/phone.py)
@@ -103,12 +113,12 @@ class Task:
         """
         raise NotImplementedError
 
-    def session_taken(self, phone) -> bool:
+    def session_taken(self, phone: Phone) -> bool:
         """Called after a failure: does the screen say the account is now in use on another device?
         If True the runner closes the app, does NOT reconnect, and pauses (see core/pause.py)."""
         return False
 
-    def recover(self, phone, log):
+    def recover(self, phone: Phone, log: logging.Logger) -> None:
         """Called after a job fails, before the next job: get back to a known screen.
         Default: restart the app (which runs on_open again). Override if the app needs something smarter."""
         self.app_was_open = False
@@ -118,7 +128,7 @@ class Task:
 
     # ------------------------------------------------------------------
     @classmethod
-    def task_name(cls):
+    def task_name(cls) -> str:
         return cls.name or re.sub(r"(?<!^)(?=[A-Z])", "_", cls.__name__).lower()
 
     @classmethod
@@ -163,7 +173,7 @@ class Task:
         return found
 
 
-def run_parts(app, phone, log, parts):
+def run_parts(app: Task, phone: Phone, log: logging.Logger, parts: dict[str, Callable[..., Any]]) -> None:
     """Run a job made of parts ({name: function(app, phone, log)}) in order, or only the ones picked with
     run.py --part (app.parts)."""
     unknown = set(app.parts or ()) - set(parts)

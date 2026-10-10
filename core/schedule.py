@@ -22,15 +22,15 @@ DAY_NAMES = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 MONTH_NAMES = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
 
 
-def _parse_days(days):
+def _parse_days(days: str | int | list[str | int] | None) -> set[int]:
     if days is None:
         return set(range(7))
-    if isinstance(days, str):
+    if isinstance(days, (str, int)):
         days = [days]
     return {d if isinstance(d, int) else DAY_NAMES.index(d.lower()[:3]) for d in days}
 
 
-def _parse_hhmm(s):
+def _parse_hhmm(s: str) -> time:
     h, m = s.split(":")
     return time(int(h), int(m))
 
@@ -38,7 +38,7 @@ def _parse_hhmm(s):
 class Schedule:
     """Base class. Subclasses implement _slots_on(day) -> local datetimes whose slot belongs to `day`."""
 
-    def __init__(self, tz=None, grace_minutes=None):
+    def __init__(self, tz: str | None = None, grace_minutes: float | None = None) -> None:
         self.tz_name = tz or config.SCHEDULE_TZ
         self.tz = ZoneInfo(self.tz_name)
         self.grace = timedelta(minutes=config.DEFAULT_GRACE_MINUTES if grace_minutes is None
@@ -87,7 +87,8 @@ class Schedule:
 
 
 class At(Schedule):
-    def __init__(self, *times, days=None, tz=None, grace_minutes=None):
+    def __init__(self, *times: str, days: str | list[str | int] | None = None, tz: str | None = None,
+                 grace_minutes: float | None = None) -> None:
         super().__init__(tz, grace_minutes)
         if not times:
             raise ValueError("At() needs at least one 'HH:MM'")
@@ -109,7 +110,8 @@ class At(Schedule):
 class Every(Schedule):
     """Slots start at the window start (or midnight) and repeat every interval until the window end."""
 
-    def __init__(self, minutes=0, hours=0, days=None, between=None, tz=None, grace_minutes=None):
+    def __init__(self, minutes: float = 0, hours: float = 0, days: str | list[str | int] | None = None,
+                 between: tuple[str, str] | None = None, tz: str | None = None, grace_minutes: float | None = None) -> None:
         super().__init__(tz, grace_minutes)
         self.interval = timedelta(minutes=minutes, hours=hours)
         if self.interval <= timedelta(0):
@@ -153,7 +155,7 @@ class Cron(Schedule):
     are restricted, a day matches when either one does.
     """
 
-    def __init__(self, expr, tz=None, grace_minutes=None):
+    def __init__(self, expr: str, tz: str | None = None, grace_minutes: float | None = None) -> None:
         super().__init__(tz, grace_minutes)
         self.expr = expr
         fields = expr.split()
@@ -170,8 +172,8 @@ class Cron(Schedule):
         self.times = sorted(time(h, m) for h in self.hours for m in self.minutes)
 
     @staticmethod
-    def _field(text, lo, hi, names=None, name_base=0):
-        def num(s):
+    def _field(text: str, lo: int, hi: int, names: list[str] | None = None, name_base: int = 0) -> set[int]:
+        def num(s: str) -> int:
             s = s.lower()
             if names and s[:3] in names:
                 return names.index(s[:3]) + name_base
@@ -193,7 +195,7 @@ class Cron(Schedule):
             out.update(range(a, b + 1, step))
         return out
 
-    def _day_matches(self, day):
+    def _day_matches(self, day: date) -> bool:
         if day.month not in self.months:
             return False
         dom_ok = day.day in self.dom

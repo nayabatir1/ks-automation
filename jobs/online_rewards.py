@@ -3,8 +3,11 @@
 Starts on the city screen or world map (bottom menu visible, no pop-up) — game.py's on_open/before_job
 see to that.
 """
+from __future__ import annotations
+
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 from core.phone import ElementNotFound
 from core.schedule import utcnow
@@ -19,10 +22,16 @@ from regions import (
     SIDE_PANEL,
 )
 
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from core.phone import Phone
+    from game import Kingshot
+
 NO_REWARD_RETRY = timedelta(minutes=30)
 
 
-def no_reward_yet(app, log):
+def no_reward_yet(app: Kingshot, log: Logger) -> datetime | timedelta:
     """No chest ready: keep the chest time we already know if it's still ahead, else look again later."""
     known = app.previous_next_at
     if known and known > utcnow():
@@ -32,7 +41,7 @@ def no_reward_yet(app, log):
     return NO_REWARD_RETRY
 
 
-def close_panel(phone):
+def close_panel(phone: Phone) -> None:
     """Close the side panel with its "<" tab (Back there would open the game's quit prompt).
     Closing the chest screen with a tap outside the panel can close the panel too: then there's nothing to do."""
     if not phone.exists(text="Wilderness", region=SIDE_PANEL, timeout=1):
@@ -42,7 +51,7 @@ def close_panel(phone):
 
 
 @job()
-def online_rewards(app, phone, log):
+def online_rewards(app: Kingshot, phone: Phone, log: Logger):
     # 1. World button (Q4) -> world map; the button then reads "Town". Skip if already there.
     if phone.exists(text="Town", region=NAV_REGION):
         log.info("already on the world map")

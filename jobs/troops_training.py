@@ -5,7 +5,10 @@ tabs switch between Barracks / Stable / Range; on each: quantity 950 -> Train. A
 "Speedups" instead of Train and is left alone.
 !! Never Finish (gems) or Speedups.
 """
+from __future__ import annotations
+
 import time
+from typing import TYPE_CHECKING
 
 from core.phone import ElementNotFound
 from core.schedule import At
@@ -22,12 +25,18 @@ from regions import (
 )
 from town import drag, find_building, go_to_building
 
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from core.phone import Phone
+    from game import Kingshot
+
 QUANTITY = 950
 QTY_BOX = (810, 1892)             # the quantity box
 
 
 @job(schedule=At("00:30", "12:00", tz="UTC"), priority=90)   # 6am + 5:30pm IST, first in those sessions
-def troops_training(app, phone, log):
+def troops_training(app: Kingshot, phone: Phone, log: Logger):
     x, y = go_to_building(phone, log, "Barracks", view=app.town_from_launch(phone, log))
     if abs(x - 540) > 100:                               # its tap menu reaches ~300 px right: centre it first
         drag(phone, x - 540, 0)
@@ -62,7 +71,7 @@ def troops_training(app, phone, log):
     log.info("next training done in %s", min(waits) if waits else "?")
 
 
-def open_training(phone, x, y):
+def open_training(phone: Phone, x: int, y: int) -> None:
     """Tap the building until its menu shows (the first tap may only collect troops), then the menu's Train."""
     for _ in range(3):
         phone.tap_xy(x, y)
@@ -77,7 +86,7 @@ def open_training(phone, x, y):
     phone.wait_for(text="Apex", region=TRAIN_TITLE, timeout=10)
 
 
-def set_quantity(phone):
+def set_quantity(phone: Phone) -> None:
     phone.tap_xy(*QTY_BOX)
     phone.wait_for(text="OK", region=TRAIN_QTY_FIELD, timeout=3)   # !! else OK's spot is the Speedups button
     phone.key("KEYCODE_MOVE_END")

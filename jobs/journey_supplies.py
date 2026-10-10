@@ -4,7 +4,10 @@ The free claim opens at 08:00 and 16:00 UTC; each run comes after one of those, 
 Side panel (works from the town or the world map) -> scroll to its bottom -> Realm Journey -> "+" by the supply
 counter -> green "Claim" (10 supplies) if it's green. !! Never the orange gem button ("Spend Gems to buy").
 """
+from __future__ import annotations
+
 import time
+from typing import TYPE_CHECKING
 
 from core import vision
 from core.phone import ElementNotFound
@@ -19,9 +22,15 @@ from regions import (
     SIDE_PANEL,
 )
 
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from core.phone import Phone
+    from game import Kingshot
+
 
 @job(schedule=At("00:30", "12:00", tz="UTC"), priority=112)   # 6am + 5:30pm IST, after intel_mission (110)
-def journey_supplies(app, phone, log):
+def journey_supplies(app: Kingshot, phone: Phone, log: Logger):
     phone.tap(image="side_tab", region=LEFT_MID, timeout=10)
     phone.wait_for(text="Wilderness", region=SIDE_PANEL, timeout=10)
     for _ in range(10):                                  # Realm Journey is the last section: scroll to the bottom

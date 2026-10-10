@@ -1,4 +1,14 @@
 {
-  "venvPath": ".",
-  "venv": ".venv"
+    "venvPath": ".",
+    "venv": ".venv",
+    "typeCheckingMode": "basic",
+    "reportMissingTypeStubs": false,
+    "reportOptionalMemberAccess": "warning",
+    "exclude": [
+        "tools_map",
+        "test.py",
+        ".venv",
+        "temp",
+        "logs"
+    ]
 }

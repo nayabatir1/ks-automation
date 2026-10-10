@@ -194,8 +194,16 @@ go to a building), `app.to_main_screen(...)`.
 | a button moved / looks different | `tools.py crop ...` a new picture into templates/, or fix the area in regions.py |
 | add a job | copy `jobs/_template.py` to `jobs/<name>.py` |
 
-After any change: `.venv/bin/ruff check --fix .` (must say "All checks passed!"), then test with
-`run.py --job <name> --keep-open --no-sleep`.
+After any change:
+
+```bash
+.venv/bin/ruff check --fix .   # style / lint: must say "All checks passed!"
+.venv/bin/pyright               # types: must say "0 errors, 0 warnings"
+```
+
+then test with `run.py --job <name> --keep-open --no-sleep`. The editor (VS Code + Pylance) shows the same type
+info while you type: hover a call to see what it takes; `phone.` / `vision.` list what exists. Types used everywhere:
+`Phone` (core/phone.py), `Kingshot` (game.py), `Image` (a screenshot), `Region` (x1, y1, x2, y2), `Logger`.
 
 ---
 

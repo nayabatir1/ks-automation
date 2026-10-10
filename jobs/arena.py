@@ -4,8 +4,11 @@ Test one part: run.py --job arena --part pan_extra_intel_mission
 Starts on the city screen or world map (bottom menu visible, no pop-up) — game.py's on_open/before_job
 open the game and close all pop-ups first; after_job backs out to where it started.
 """
+from __future__ import annotations
+
 import re
 import time
+from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -26,13 +29,20 @@ from regions import (
 )
 from town import go_to_building
 
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from core.phone import Phone
+    from core.vision import Image
+    from game import Kingshot
+
 
 @job(schedule=At("23:53", tz="UTC"))
-def arena(app, phone, log):
+def arena(app: Kingshot, phone: Phone, log: Logger):
     run_parts(app, phone, log, {"pan_extra_intel_mission": pan_extra_intel_mission, "arena": fight_arena})
 
 
-def pan_extra_intel_mission(app, phone, log):
+def pan_extra_intel_mission(app: Kingshot, phone: Phone, log: Logger):
     """World map -> compass button (Q4, right) -> Intel Mission: tap the hero portrait (top left) when it's there,
     which brings new missions. Then close Intel Mission and go to the town view."""
     if phone.exists(text="World", region=NAV_REGION):            # on the town: the button names the world map
@@ -53,7 +63,7 @@ def pan_extra_intel_mission(app, phone, log):
     phone.wait_for(text="World", region=NAV_REGION, timeout=15)   # the town is shown where it was left
 
 
-def fight_arena(app, phone, log):
+def fight_arena(app: Kingshot, phone: Phone, log: Logger):
     # 1. town view with a known position (relaunches the game if needed)
     view = app.town_from_launch(phone, log)
 
@@ -86,7 +96,7 @@ def fight_arena(app, phone, log):
         log.info("back in town")
 
 
-def attack_all(phone, log):
+def attack_all(phone: Phone, log: Logger) -> None:
     """Fight until the daily attempts are used (see step 5 in arena())."""
     refreshes = 0
     for _ in range(MAX_FIGHTS):
@@ -120,7 +130,7 @@ POWER_X = (285, 430)       # the power figure beside the fist icon: green = lowe
 SWORDS_X = (880, 990)      # the teal swords button at the right of each row
 
 
-def attempts_left(phone):
+def attempts_left(phone: Phone) -> int:
     """N from "Daily challenges: N" (above Free Refresh)."""
     for m in vision.ocr_lines(phone.screen(DAILY_CHALLENGES), DAILY_CHALLENGES):
         n = re.search(r"challenges\W*(\d+)", m.text, re.IGNORECASE)
@@ -129,11 +139,11 @@ def attempts_left(phone):
     raise RuntimeError("could not read 'Daily challenges: N'")
 
 
-def opponents(phone):
+def opponents(phone: Phone) -> list[tuple[int, bool, int | None]]:
     return read_opponents(phone.screen((0, 0.28, 1, 0.74)))
 
 
-def read_opponents(img):
+def read_opponents(img: Image) -> list[tuple[int, bool, int | None]]:
     """[(y, green, power)] for the rows in the Challenge List, top to bottom. green = power lower than mine (the
     game's own colour). power: the real value (15.9M -> 15,900,000; 166,500 -> 166,500), or None if unreadable."""
     x1, x2, y1, y2 = POWER_X[0], POWER_X[1], 700, 1720
@@ -153,7 +163,7 @@ def read_opponents(img):
     return rows
 
 
-def power_value(img, y):
+def power_value(img: Image, y: int) -> int | None:
     """The coloured power figure beside the fist, as a real number. Two formats: "15.9M" (1M and up, always one
     decimal) and "166,500" (under 1M, full number). OCR loses the dot and commas, so: digits read + whether there's
     an M. A reading of 1-3 digits can only be the M format (full numbers have 4+ digits)."""
@@ -176,7 +186,7 @@ def power_value(img, y):
     return int(digits)
 
 
-def weakest_opponent(phone, log, red=False):
+def weakest_opponent(phone: Phone, log: Logger, red: bool = False) -> int | None:
     """y of the lowest-powered green (weaker than me) opponent, or None if there isn't one.
     red=True: the lowest-powered red one instead (used only once the free refreshes are gone)."""
     rows = opponents(phone)
@@ -186,7 +196,7 @@ def weakest_opponent(phone, log, red=False):
     return min(pick)[1] if pick else None
 
 
-def open_challenge_list(phone):
+def open_challenge_list(phone: Phone) -> None:
     """Be on the Challenge List: after a fight we may land on the Arena screen instead."""
     if phone.exists(text="Challenge List", region=LIST_TITLE, timeout=2):
         return
@@ -194,7 +204,7 @@ def open_challenge_list(phone):
     phone.wait_for(text="Challenge List", region=LIST_TITLE, timeout=10)
 
 
-def fight(phone, log, y):
+def fight(phone: Phone, log: Logger, y: int) -> None:
     """Swords -> Squad Settings -> Fight -> pause -> Retreat -> result -> tap anywhere to exit."""
     tap_swords(phone, y)
     phone.tap(text="Fight", region=FIGHT_BUTTON, timeout=15)          # Squad Settings: green Fight, bottom right
@@ -206,7 +216,7 @@ def fight(phone, log, y):
     phone.wait_gone(text="Tap anywhere", region=(0.15, 0.93, 0.85, 0.99), timeout=10)
 
 
-def pause_and_retreat(phone):
+def pause_and_retreat(phone: Phone) -> None:
     """Battle: pause (bottom left), then Retreat. A pause tap right as the fight starts is ignored, so tap pause
     again until the Retreat / Continue menu shows."""
     phone.wait_for(image="battle_pause", region=PAUSE_AREA, timeout=20)
@@ -218,7 +228,7 @@ def pause_and_retreat(phone):
     raise RuntimeError("the battle didn't pause (no Retreat / Continue menu)")
 
 
-def tap_swords(phone, y):
+def tap_swords(phone: Phone, y: int) -> None:
     """Tap the swords button of the row at y, after checking it really is the teal button."""
     box = (SWORDS_X[0], y - 45, SWORDS_X[1], y + 45)
     hue = vision.median_hue(phone.screen((0, 0.3, 1, 0.72)), box)
@@ -227,7 +237,7 @@ def tap_swords(phone, y):
     phone.tap_xy((SWORDS_X[0] + SWORDS_X[1]) // 2, y)
 
 
-def free_refresh(phone, log):
+def free_refresh(phone: Phone, log: Logger) -> bool:
     """Tap Free Refresh only if it says "Free" and is green. Returns True if refreshed."""
     m = phone.find(text="Free", region=FREE_REFRESH)
     if not m:
@@ -243,11 +253,11 @@ def free_refresh(phone, log):
     return True
 
 
-def my_standing(phone):
+def my_standing(phone: Phone) -> tuple[int | None, int]:
     return read_standing(phone.screen(ARENA_MY_ROW))
 
 
-def read_standing(img):
+def read_standing(img: Image) -> tuple[int | None, int]:
     """(rank, points) from your own row: the rank is the number at the far left (None when it says "Unranked"),
     the points the right-most number. Name and power in between are ignored."""
     nums = []

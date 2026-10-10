@@ -3,7 +3,10 @@
 Starts on the city screen or world map (bottom menu visible, no pop-up) — game.py's on_open/before_job
 open the game and close all pop-ups first.
 """
+from __future__ import annotations
+
 from datetime import timedelta
+from typing import TYPE_CHECKING
 
 from core.task import job
 from core.vision import coloured_share, median_hue
@@ -17,9 +20,15 @@ from regions import (
     TECH_HEADER,
 )
 
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from core.phone import Phone
+    from game import Kingshot
+
 
 @job()
-def alliance_tech_contribution(app, phone, log):
+def alliance_tech_contribution(app: Kingshot, phone: Phone, log: Logger):
     # 1. "Alliance" in the bottom menu (Q4); its 99+ badge may or may not be there, so match the text
     app.tap_on_main(phone, log, text="Alliance", region=NAV_Q4, then={"text": "Alliance", "region": ALLIANCE_TITLE})
     phone.wait_for(text="Alliance", region=ALLIANCE_TITLE, timeout=10)   # Alliance screen's title (top-left)

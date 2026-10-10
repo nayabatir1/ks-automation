@@ -19,6 +19,10 @@ import pytesseract
 
 import config
 
+Image = np.ndarray                          # an OpenCV BGR screenshot, or a piece of one
+Region = tuple[float, float, float, float]  # (x1, y1, x2, y2): pixels, or fractions of the screen (0-1)
+TextTarget = str | re.Pattern[str]          # text to look for: plain (case/OCR-slip tolerant) or a regex
+
 
 @dataclass
 class Match:
@@ -32,11 +36,11 @@ class Match:
     source: str = ""      # "normal" / "light" (OCR pass) or "image"
 
     @property
-    def center(self):
+    def center(self) -> tuple[int, int]:
         return self.x + self.w // 2, self.y + self.h // 2
 
     @property
-    def box(self):
+    def box(self) -> tuple[int, int, int, int]:
         return self.x, self.y, self.x + self.w, self.y + self.h
 
     def __str__(self):
@@ -47,14 +51,14 @@ class Match:
 
 
 # ------------------------------------------------------------------ images
-def decode_png(data: bytes):
+def decode_png(data: bytes) -> Image:
     img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
     if img is None:
         raise ValueError("Could not decode screenshot")
     return img
 
 
-def resolve_region(region, shape):
+def resolve_region(region: Region | None, shape: tuple[int, ...]) -> tuple[int, int, int, int]:
     """region = (x1, y1, x2, y2) in pixels, or fractions of the screen if all values are <= 1.
 
     e.g. (0, 0.8, 1, 1) = bottom 20% of the screen. Returns pixel ints clipped to the screen.
@@ -73,13 +77,13 @@ def resolve_region(region, shape):
     return x1, y1, x2, y2
 
 
-def crop(img, region):
+def crop(img: Image, region: Region | None) -> tuple[Image, tuple[int, int]]:
     x1, y1, x2, y2 = resolve_region(region, img.shape)
     return img[y1:y2, x1:x2], (x1, y1)
 
 
 # ------------------------------------------------------------------ OCR
-def _tesseract_words(gray, offset, source):
+def _tesseract_words(gray: Image, offset: tuple[int, int], source: str) -> list[Match]:
     data = pytesseract.image_to_data(gray, lang=config.OCR_LANG, config="--psm 11",
                                      output_type=pytesseract.Output.DICT)
     ox, oy = offset
@@ -96,14 +100,14 @@ def _tesseract_words(gray, offset, source):
     return words
 
 
-def light_text_mask(bgr):
+def light_text_mask(bgr: Image) -> Image:
     """Black text on white, made from the light (white-ish) pixels only, outlines removed."""
     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
     light = ((hsv[:, :, 2] >= 170) & (hsv[:, :, 1] <= 70)).astype(np.uint8) * 255
 
     h, w = light.shape
     n, labels, stats, _ = cv2.connectedComponentsWithStats(light, connectivity=8)
-    keep = np.zeros(n, bool)
+    keep: np.ndarray = np.zeros(n, bool)
     max_char_h = min(h, 150)                               # letters are < 150 px tall at 1080x2340
     for i in range(1, n):
         _, _, cw, ch, area = stats[i]
@@ -119,18 +123,18 @@ def light_text_mask(bgr):
         if cw * ch > 2500 and fill < 0.15:                 # hollow frame = button outline
             continue
         keep[i] = True
-    mask = keep[labels].astype(np.uint8) * 255
+    mask = keep[np.asarray(labels, dtype=np.intp)].astype(np.uint8) * 255
     out = 255 - mask
     return cv2.copyMakeBorder(out, 10, 10, 10, 10, cv2.BORDER_CONSTANT, value=255)
 
 
-def _overlaps(a: Match, b: Match):
+def _overlaps(a: Match, b: Match) -> bool:
     ix = max(0, min(a.x + a.w, b.x + b.w) - max(a.x, b.x))
     iy = max(0, min(a.y + a.h, b.y + b.h) - max(a.y, b.y))
     return ix * iy > 0.3 * min(a.w * a.h, b.w * b.h)
 
 
-def ocr_words(img, region=None, passes=("normal", "light")):
+def ocr_words(img: Image, region: Region | None = None, passes: tuple[str, ...] = ("normal", "light")) -> list[Match]:
     """All words on screen (or in region), from the requested OCR passes, de-duplicated."""
     part, (ox, oy) = crop(img, region)
     words = []
@@ -143,7 +147,7 @@ def ocr_words(img, region=None, passes=("normal", "light")):
     return words
 
 
-def group_lines(words):
+def group_lines(words: list[Match]) -> list[list[Match]]:
     """Join words into lines/phrases: same row and close together horizontally."""
     # 1. rows: words whose vertical centres line up
     rows = []
@@ -172,7 +176,7 @@ def group_lines(words):
     return lines
 
 
-def merge(words):
+def merge(words: list[Match]) -> Match:
     x1 = min(w.x for w in words)
     y1 = min(w.y for w in words)
     x2 = max(w.x + w.w for w in words)
@@ -181,17 +185,17 @@ def merge(words):
                  " ".join(w.text for w in words), words[0].source)
 
 
-def ocr_lines(img, region=None, passes=("normal", "light")):
+def ocr_lines(img: Image, region: Region | None = None, passes: tuple[str, ...] = ("normal", "light")) -> list[Match]:
     """OCR result as phrases (one Match per line), sorted top-to-bottom, left-to-right."""
     lines = [merge(l) for l in group_lines(ocr_words(img, region, passes))]
     return sorted(lines, key=lambda m: (m.y, m.x))
 
 
-def _norm(s):
+def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip().lower()
 
 
-def find_text(img, text, region=None):
+def find_text(img: Image, text: TextTarget, region: Region | None = None) -> Match | None:
     """Find text on screen. Returns the best Match or None.
 
     text: a string (case-insensitive, matches inside a phrase too: "about" finds "About phone")
@@ -221,7 +225,7 @@ def find_text(img, text, region=None):
 _template_cache = {}
 
 
-def load_template(name_or_path):
+def load_template(name_or_path: str | Path) -> tuple[Image, str]:
     p = Path(name_or_path)
     if not p.suffix:
         p = config.TEMPLATE_DIR / f"{name_or_path}.png"
@@ -235,7 +239,8 @@ def load_template(name_or_path):
     return _template_cache[p], p.stem
 
 
-def find_image(img, image, region=None, threshold=None, scales=(1.0,)):
+def find_image(img: Image, image: str | Path, region: Region | None = None, threshold: float | None = None,
+               scales: tuple[float, ...] = (1.0,)) -> Match | None:
     """Find a template image (templates/NAME.png) on screen. Returns Match or None.
 
     Templates cut from the phone's own screenshots (tools.py crop / tools.py template) match at
@@ -263,12 +268,12 @@ def find_image(img, image, region=None, threshold=None, scales=(1.0,)):
 _CLAHE = cv2.createCLAHE(2.0, (8, 8))
 
 
-def _outline(img):
+def _outline(img: Image) -> Image:
     g = _CLAHE.apply(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
     return cv2.GaussianBlur(cv2.Canny(g, 40, 120), (7, 7), 0)
 
 
-def find_shape(img, image, region=None, threshold=0.5):
+def find_shape(img: Image, image: str | Path, region: Region | None = None, threshold: float = 0.5) -> Match | None:
     """Like find_image, but compares outlines (edges) instead of colours/brightness, so a template cut in daylight
     still matches at night. Scores run lower than find_image (~0.95 same lighting, ~0.75 day vs night, < 0.25 for
     other things), hence the lower threshold."""
@@ -283,7 +288,7 @@ def find_shape(img, image, region=None, threshold=0.5):
     return Match(x + ox, y + oy, tw, th, float(score), name, "shape")
 
 
-def median_hue(img, region):
+def median_hue(img: Image, region: Region | None) -> float:
     """Typical colour of an area as an OpenCV hue (0-180: red ~0, orange ~15, green ~60, teal ~90, blue ~110).
     Only coloured pixels count (white/grey text is skipped)."""
     part, _ = crop(img, region)
@@ -292,14 +297,14 @@ def median_hue(img, region):
     return float(np.median(hsv[:, :, 0][coloured])) if coloured.any() else -1.0
 
 
-def coloured_share(img, region):
+def coloured_share(img: Image, region: Region | None) -> float:
     """Fraction of an area that is coloured (saturated) rather than white/grey/black, 0-1.
     A greyed-out button is close to 0."""
     part, _ = crop(img, region)
     return float((cv2.cvtColor(part, cv2.COLOR_BGR2HSV)[:, :, 1] > 80).mean())
 
 
-def red_dots(img, region=None):
+def red_dots(img: Image, region: Region | None = None) -> list[tuple[int, int]]:
     """Centres (x, y) of the small bright-red notification dots in an area, top to bottom, left to right.
     Round blobs of ~20 px only, so red icons, ribbons and "!" badges don't count."""
     part, (ox, oy) = crop(img, region)
@@ -312,9 +317,9 @@ def red_dots(img, region=None):
     return sorted(dots, key=lambda d: (d[1] // 30, d[0]))
 
 
-def screen_diff(a, b, region=None):
+def screen_diff(a: Image, b: Image, region: Region | None = None) -> float:
     """Mean pixel difference (0-255) between two screenshots, on a small greyscale version."""
-    def small(im):
+    def small(im: Image) -> np.ndarray:
         part, _ = crop(im, region)
         h, w = part.shape[:2]
         return cv2.resize(cv2.cvtColor(part, cv2.COLOR_BGR2GRAY), (max(1, w // 10), max(1, h // 10)),

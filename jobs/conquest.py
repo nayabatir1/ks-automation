@@ -3,7 +3,10 @@
 Starts on the city screen or world map (bottom menu visible, no pop-up) — game.py's on_open/before_job
 open the game and close all pop-ups first.
 """
+from __future__ import annotations
+
 from datetime import timedelta
+from typing import TYPE_CHECKING
 
 from core.phone import ElementNotFound
 from core.schedule import utcnow
@@ -18,11 +21,17 @@ from regions import (
     NAV_Q3,
 )
 
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from core.phone import Phone
+    from game import Kingshot
+
 IDLE_FULL = timedelta(hours=9)      # "Max Idle Time: 9 hrs"
 
 
 @job()
-def conquest(app, phone, log):
+def conquest(app: Kingshot, phone: Phone, log: Logger):
     # 1. "Conquest" at the bottom-left of the bottom menu (Q3); its red dot may come and go, so match the text
     app.tap_on_main(phone, log, text="Conquest", region=NAV_Q3)
     phone.wait_for(text="Conquer", region=CONQUER_BUTTON, timeout=10)   # conquest screen: big "Conquer" button

@@ -5,9 +5,12 @@ check "Lv.8" and the "Only search for full Resources" tick -> Search -> Gather -
 "Other Troops are marching toward the same target" -> Cancel, search again. Troops aren't waited for.
 Starts on the city screen or world map; after_job backs out to where it started.
 """
+from __future__ import annotations
+
 import re
 import time
 from datetime import timedelta
+from typing import TYPE_CHECKING
 
 import cv2
 import pytesseract
@@ -30,6 +33,13 @@ from regions import (
     TILE_GATHER,
 )
 
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from core.phone import Phone
+    from core.vision import Image
+    from game import Kingshot
+
 RESOURCES = ("Bread", "Wood", "Stone", "Iron")
 LEVEL = 8                                       # 8 is the slider's top, so "Lv.8" always shows in one spot
 FIELD_OK = (942, 2125)                          # OK of the text field the number box opens
@@ -38,7 +48,7 @@ DEPLOY_TAP = (822, 2240)
 
 
 @job(timeout=600)   # every 7.5 h (the job returns it); a few re-searches fit in 10 min
-def farming(app, phone, log):
+def farming(app: Kingshot, phone: Phone, log: Logger):
     if phone.exists(text="World", region=NAV_REGION):            # on the town: the button names the world map
         phone.tap(text="World", region=NAV_REGION)
         phone.wait_for(text="Town", region=NAV_REGION, timeout=15)
@@ -51,7 +61,7 @@ def farming(app, phone, log):
     return timedelta(hours=7, minutes=30)
 
 
-def gather(phone, log, kind, tries=3):
+def gather(phone: Phone, log: Logger, kind: str, tries: int = 3) -> None:
     """One march to a Lv.8 tile of this resource. Starts and ends on the world map."""
     for attempt in range(tries):
         if not phone.exists(text="Search", region=SEARCH_PANEL_GO, timeout=1):
@@ -97,7 +107,7 @@ def gather(phone, log, kind, tries=3):
     log.info("%s: no free tile after %d tries", kind, tries)
 
 
-def swipe_row_to_end(phone):
+def swipe_row_to_end(phone: Phone) -> None:
     """Swipe the search panel's row of targets left until it stops moving."""
     for _ in range(6):
         phone.forget_screen()
@@ -109,7 +119,7 @@ def swipe_row_to_end(phone):
             return
 
 
-def set_level(phone, level):
+def set_level(phone: Phone, level: int) -> None:
     """Type the level into the search panel's number box (a text field with OK opens)."""
     phone.tap_xy(*SEARCH_LEVEL_BOX)
     time.sleep(1)
@@ -121,7 +131,7 @@ def set_level(phone, level):
     time.sleep(1)
 
 
-def level_label(img):
+def level_label(img: Image) -> int | None:
     """The number in the search panel's "Lv.N" label, or None."""
     x1, y1, x2, y2 = SEARCH_LEVEL_LABEL
     gray = cv2.cvtColor(img[y1:y2, x1:x2], cv2.COLOR_BGR2GRAY)

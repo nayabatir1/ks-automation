@@ -10,13 +10,16 @@ Launch sequence seen on 2026-10-03 (fresh start, ~25 s total):
             !! these pop-ups have real-money buttons (e.g. "₹89.00") — never tap blindly !!
 """
 import time
+from logging import Logger
+from typing import Any
 
 import cv2
 import numpy as np
 
 from core import vision
-from core.phone import ElementNotFound, PhoneError
+from core.phone import ElementNotFound, Phone, PhoneError
 from core.task import Task
+from core.vision import Image
 from regions import (
     LOADING,
     LOADING_REGION,
@@ -32,7 +35,7 @@ from regions import (
 
 class Kingshot(Task):
     name = "kingshot"
-    package = "com.run.tower.defense"
+    package: str = "com.run.tower.defense"
     jobs_package = "jobs"                # jobs/*.py, one file per job
     town_view = None                     # town view position if known: (0, 0) right after a fresh launch
     reuse_open_app = True                # game already open? use it (on_open checks the screen)
@@ -42,7 +45,7 @@ class Kingshot(Task):
 
     # ------------------------------------------------------------------ hooks (runner calls these)
     # launch -> on_open -> [before_job -> job] ... -> close app. Jobs start on the city screen.
-    def on_open(self, phone, log):
+    def on_open(self, phone: Phone, log: Logger) -> None:
         if self.app_was_open:
             try:   # already running: back out to the city / world map (closing any pop-up)
                 self.to_main_screen(phone, log)
@@ -57,7 +60,7 @@ class Kingshot(Task):
         self._just_opened = True
         self.town_view = (0, 0)                          # fresh launch: town view centred on the Town Center
 
-    def before_job(self, phone, log):
+    def before_job(self, phone: Phone, log: Logger) -> None:
         if getattr(self, "_just_opened", False):   # on_open already left us on the city screen
             self._just_opened = False
         else:
@@ -65,7 +68,7 @@ class Kingshot(Task):
             self.town_view = None                        # ...and moved the town view
         self.start_view = self.current_view(phone)
 
-    def town_from_launch(self, phone, log):
+    def town_from_launch(self, phone: Phone, log: Logger) -> tuple[float, float] | None:
         """The town view with a known position, for jobs that go to a building: right after a fresh launch it is
         centred on the Town Center ((0, 0)); otherwise the game is relaunched (the user's choice: more reliable than
         working out where an old view is). Returns the view."""
@@ -77,7 +80,7 @@ class Kingshot(Task):
         self._just_opened = False
         return self.town_view
 
-    def after_job(self, phone, log):
+    def after_job(self, phone: Phone, log: Logger) -> None:
         """Close the job's pages and go back to the view the job started from: world map or town."""
         self.to_main_screen(phone, log)
         if self.current_view(phone) != self.start_view:
@@ -88,17 +91,17 @@ class Kingshot(Task):
         log.info("back on the %s", self.start_view)
 
     @staticmethod
-    def current_view(phone):
+    def current_view(phone: Phone) -> str:
         """'world' or 'town': the bottom-right button names the other one."""
         return "world" if phone.exists(text="Town", region=NAV_Q4) else "town"
 
-    def session_taken(self, phone):
+    def session_taken(self, phone: Phone) -> bool:
         """'The account has been logged in on another device.' (Tips box with Contact Us / Reconnect).
         Never tap Reconnect: that would kick the user off their own phone."""
         return phone.exists(text="logged in on another device", region=SESSION_TAKEN_TEXT)
 
     # ------------------------------------------------------------------ shared steps
-    def to_main_screen(self, phone, log, max_back=6):
+    def to_main_screen(self, phone: Phone, log: Logger, max_back: int = 6) -> int | None:
         """Get to the city / world map: close pop-ups, and press Back while the bottom menu isn't showing
         (e.g. a job left a menu or box open). Back is never pressed with the bottom menu visible, so it
         can't reach the game's exit prompt."""
@@ -111,7 +114,7 @@ class Kingshot(Task):
                 log.info("not on the city / world map; pressing Back (%d)", i + 1)
                 phone.back()
 
-    def open_game(self, phone, log):
+    def open_game(self, phone: Phone, log: Logger) -> None:
         """The app is launched (runner did that); wait until it has finished loading."""
         t0 = time.monotonic()
         try:   # the loading bar shows up a few seconds after launch (splash first)
@@ -124,7 +127,7 @@ class Kingshot(Task):
         log.info("game loaded after %.0fs", time.monotonic() - t0)
 
     @staticmethod
-    def _wait_gone_quietly(phone, **target):
+    def _wait_gone_quietly(phone: Phone, **target: Any) -> None:
         """After closing a pop-up: wait (up to 3 s) until it has gone, so the same one isn't tapped twice.
         Another pop-up in the same place is fine: the loop handles it next."""
         try:
@@ -132,7 +135,7 @@ class Kingshot(Task):
         except PhoneError:
             pass
 
-    def close_popups(self, phone, log, max_popups=8, timeout=30):
+    def close_popups(self, phone: Phone, log: Logger, max_popups: int = 8, timeout: float = 30) -> int:
         """Close pop-ups until the bottom menu (city or world map) shows with none left:
         offer pop-ups by their X, "Welcome back!" (offline income) by its Confirm button.
         Returns as soon as the menu shows; a pop-up arriving later is handled by tap_on_main().
@@ -143,7 +146,8 @@ class Kingshot(Task):
         log.info("closed %d pop-up(s); on the city / world map", closed)
         return closed
 
-    def _close_one_popup(self, phone, log, closed, max_popups, timeout, also=None):
+    def _close_one_popup(self, phone: Phone, log: Logger, closed: int, max_popups: int, timeout: float,
+                         also: dict[str, Any] | None = None) -> bool:
         """Wait for a pop-up, the bottom menu, or `also`; close a pop-up if that's what showed.
         Returns True if a pop-up was closed, False if the menu (or `also`) showed."""
         targets = [{"image": "close_x", "region": POPUP_X_REGION},       # pop-ups first
@@ -180,7 +184,8 @@ class Kingshot(Task):
             self._wait_gone_quietly(phone, text="Welcome back", region=WELCOME_TITLE)
         return True
 
-    def tap_on_main(self, phone, log, timeout=15, then=None, **target):
+    def tap_on_main(self, phone: Phone, log: Logger, timeout: float = 15, then: dict[str, Any] | None = None,
+                    **target: Any) -> vision.Match:
         """First tap of a job on the city / world map, done straight away (no extra look first).
         If a pop-up turns up instead (they can arrive a moment late), close it, then tap.
         then={text/image, region}: what the tap should open. The game now and then ignores a job's first tap, so
@@ -198,7 +203,7 @@ class Kingshot(Task):
         return m
 
 
-def any_close_x(img, min_score=0.78):
+def any_close_x(img: Image, min_score: float = 0.78) -> tuple[int, int] | None:
     """A pop-up's close X found by its cross shape alone, whatever its colours: light on dark or dark on light, any
     hue, sizes 0.8-1.25x. Each pixel is compared with its surroundings (brighter / darker than the local average),
     so no colour is assumed. (x, y) or None. Real X buttons score 0.83-0.95, normal screens <= 0.70."""
@@ -214,7 +219,7 @@ def any_close_x(img, min_score=0.78):
     return at if best >= min_score else None
 
 
-def _contrast_masks(img):
+def _contrast_masks(img: Image) -> list[np.ndarray]:
     """[pixels clearly brighter than their surroundings, pixels clearly darker] as 0/255 images."""
     g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.float32)
     local = cv2.blur(g, (45, 45))

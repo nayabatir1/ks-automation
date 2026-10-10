@@ -13,12 +13,13 @@ import json
 import re
 import threading
 import time
+from logging import Logger
 from pathlib import Path
 
 import numpy as np
 
 from core import vision
-from core.phone import ElementNotFound
+from core.phone import ElementNotFound, Phone
 
 TOWN = {b["name"]: (b["x"], b["y"]) for b in
         json.loads((Path(__file__).parent / "screens/town.json").read_text())["buildings"]}
@@ -33,7 +34,7 @@ SAFE = (180, 350, 860, 1750)   # only tap a building whose centre is in here: cl
 MAP_AREA = (0, 0.1, 1, 0.85)   # where buildings can be on screen (no top bar / chat / bottom menu)
 
 
-def snap(text):
+def snap(text: str) -> str | None:
     """OCR text -> a town building name, or None."""
     t = re.sub(r"[^A-Za-z0-9 ]", "", text).strip().lower().replace(" ", "")
     if len(t) < 4:
@@ -46,7 +47,8 @@ def snap(text):
     return best if score >= 0.8 else None
 
 
-def look(phone, dx=-1, dy=0, target=None):
+def look(phone: Phone, dx: float = -1, dy: float = 0,
+         target: str | None = None) -> tuple[dict[str, tuple[int, int]], tuple[float, float]]:
     """Slow drag (finger LOOK_PX towards (dx, dy)) reading names on screenshots taken during it.
     Returns (names, still): {name: (x, y)} from the last screenshot with names (or the first one showing `target`),
     and the view movement still to come after that screenshot (the drag goes on until LOOK_MS)."""
@@ -77,7 +79,7 @@ def look(phone, dx=-1, dy=0, target=None):
     return best, (-fx * RATIO * rest, -fy * RATIO * rest)
 
 
-def where(names):
+def where(names: dict[str, tuple[int, int]]) -> tuple[float, float] | None:
     """View position (top-left of the screen in town coordinates) from the names on screen, or None."""
     est = [(TOWN[n][0] - x, TOWN[n][1] - y) for n, (x, y) in names.items()]
     if not est:
@@ -87,7 +89,7 @@ def where(names):
     return tuple(np.median(np.array(good), axis=0)) if good else tuple(med)
 
 
-def drag(phone, vx, vy):
+def drag(phone: Phone, vx: float, vy: float) -> tuple[float, float]:
     """Move the view by about (vx, vy) with one drag, always lifted. The finger stays in the band of the screen
     that has no icons (x 90-990 around y 1000; up to y 500-1500 for vertical moves). Capped at ~1 screen.
     Returns the move actually asked for."""
@@ -99,16 +101,17 @@ def drag(phone, vx, vy):
     return -fx * RATIO, -fy * RATIO
 
 
-def template(name):
+def template(name: str) -> str:
     return "town_" + re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
 
 
-def find_building(phone, name):
+def find_building(phone: Phone, name: str) -> vision.Match | None:
     """The building's picture on screen right now: vision.Match or None."""
     return vision.find_shape(phone.screen(MAP_AREA), template(name), MAP_AREA, threshold=0.4)   # day or night
 
 
-def go_to_building(phone, log, name, view=None, tries=6):
+def go_to_building(phone: Phone, log: Logger, name: str, view: tuple[float, float] | None = None,
+                   tries: int = 6) -> tuple[int, int]:
     """Bring a town building on screen; returns the screen point to tap it. Raises ElementNotFound.
 
     view: where the view is, if known: (0, 0) right after a fresh launch (Town Center centred)."""

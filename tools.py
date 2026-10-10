@@ -26,17 +26,21 @@ import time
 import config
 from core import vision
 from core.phone import Phone, PhoneError
+from core.vision import Region
 
 
-def _num(s):
+def _num(s: str) -> float:
     return float(s) if "." in s else int(s)
 
 
-def _region(argv):
-    return tuple(_num(v) for v in argv[:4]) if len(argv) >= 4 else None
+def _region(argv: list[str]) -> Region | None:
+    if len(argv) < 4:
+        return None
+    x1, y1, x2, y2 = (_num(v) for v in argv[:4])
+    return x1, y1, x2, y2
 
 
-def main(argv):
+def main(argv: list[str]) -> int:
     if not argv or argv[0] in ("-h", "--help", "help"):
         print(__doc__)
         return 0
@@ -70,11 +74,12 @@ def main(argv):
             print("usage: tools.py crop x1 y1 x2 y2 NAME")
             return 2
         import cv2
-        part, _ = vision.crop(p.screen(), _region(args))
+        shot = p.screen()
+        part, _ = vision.crop(shot, _region(args))
         config.TEMPLATE_DIR.mkdir(exist_ok=True)
         out = config.TEMPLATE_DIR / f"{args[4]}.png"
         cv2.imwrite(str(out), part)
-        m = vision.find_image(p.last_screen, out)
+        m = vision.find_image(shot, out)
         print(f"saved {out} ({part.shape[1]}x{part.shape[0]}); self-check: {m or 'NOT matched'}")
     elif cmd == "template":
         if len(args) < 2:
@@ -93,7 +98,9 @@ def main(argv):
         out = config.TEMPLATE_DIR / f"{args[1]}.png"
         config.TEMPLATE_DIR.mkdir(exist_ok=True)
         cv2.imwrite(str(out), part)
-        print(f"found at {m.center} (scale x{m.w / cv2.imread(args[0]).shape[1]:.2f}, score {m.score:.2f})")
+        src = cv2.imread(args[0])
+        src_w = src.shape[1] if src is not None else m.w
+        print(f"found at {m.center} (scale x{m.w / src_w:.2f}, score {m.score:.2f})")
         print(f"saved {out} ({m.w}x{m.h}, phone pixels); self-check: {vision.find_image(img, out)}")
     elif cmd == "findimg":
         if not args:

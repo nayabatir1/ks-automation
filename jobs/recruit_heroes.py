@@ -3,8 +3,11 @@
 Starts on the city screen or world map (bottom menu visible, no pop-up) — game.py's on_open/before_job
 open the game and close all pop-ups first; after_job backs out to where it started.
 """
+from __future__ import annotations
+
 import re
 from datetime import timedelta
+from typing import TYPE_CHECKING
 
 from core.task import job
 from core.timeparse import parse_duration
@@ -20,11 +23,18 @@ from regions import (
     RECRUIT_TITLE,
 )
 
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from core.phone import Phone
+    from core.vision import Region
+    from game import Kingshot
+
 TAP_TO_EXIT = (0.2, 0.84, 0.8, 0.88)     # Rewards screen: "Tap anywhere to exit" (an orange paid Recruit x1 sits above it)
 
 
 @job()
-def recruit_heroes(app, phone, log):
+def recruit_heroes(app: Kingshot, phone: Phone, log: Logger):
     # 1. "Heroes" in the bottom menu (Q3); its red dot may come and go, so match the text
     app.tap_on_main(phone, log, text="Heroes", region=NAV_Q3)
     phone.wait_for(text="Heroes", region=HEROES_TITLE, timeout=10)
@@ -45,7 +55,7 @@ def recruit_heroes(app, phone, log):
     return min(waits) + timedelta(seconds=10)
 
 
-def recruit_free(phone, log, kind, button, timer):
+def recruit_free(phone: Phone, log: Logger, kind: str, button: Region, timer: Region) -> timedelta | None:
     """Free recruit if the button is green and says Free; returns the time to the next free one (or None)."""
     m = phone.find(text="Free", region=button)
     if m and 35 <= median_hue(phone.last_screen, button) <= 85:
@@ -63,7 +73,7 @@ def recruit_free(phone, log, kind, button, timer):
     return wait
 
 
-def next_free(phone, timer, tries=3):
+def next_free(phone: Phone, timer: Region, tries: int = 3) -> timedelta | None:
     """'Next free: 1d 07:59:52' -> timedelta. OCR now and then drops part of it, so only a reading with a whole
     h:mm:ss clock counts; None if there isn't one (e.g. Advanced shows "Daily free recruitments: 5")."""
     for _ in range(tries):
