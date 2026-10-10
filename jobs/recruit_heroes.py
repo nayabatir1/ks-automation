@@ -6,6 +6,7 @@ open the game and close all pop-ups first; after_job backs out to where it start
 from __future__ import annotations
 
 import re
+import time
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
     from game import Kingshot
 
 TAP_TO_EXIT = (0.2, 0.84, 0.8, 0.88)     # Rewards screen: "Tap anywhere to exit" (an orange paid Recruit x1 sits above it)
+UNREAD_RETRY = timedelta(minutes=30)     # a timer that didn't read: look again this soon, so its free recruit isn't missed
 
 
 @job()
@@ -49,10 +51,12 @@ def recruit_heroes(app: Kingshot, phone: Phone, log: Logger):
     #    !! Every other recruit button is orange and costs keys: never tapped.
     waits = [recruit_free(phone, log, "advanced", ADVANCED_X1, ADVANCED_TIMER),
              recruit_free(phone, log, "epic", EPIC_X1, EPIC_TIMER)]
-    waits = [w for w in waits if w is not None]
-    if not waits:
+    read = [w for w in waits if w is not None]
+    if not read:
         raise RuntimeError("could not read either 'Next free' timer")
-    return min(waits) + timedelta(seconds=10)
+    if len(read) < len(waits):                      # one timer unread: its free recruit may come before the other's
+        return min(*read, UNREAD_RETRY)
+    return min(read) + timedelta(seconds=10)
 
 
 def recruit_free(phone: Phone, log: Logger, kind: str, button: Region, timer: Region) -> timedelta | None:
@@ -73,12 +77,15 @@ def recruit_free(phone: Phone, log: Logger, kind: str, button: Region, timer: Re
     return wait
 
 
-def next_free(phone: Phone, timer: Region, tries: int = 3) -> timedelta | None:
+def next_free(phone: Phone, timer: Region, tries: int = 5) -> timedelta | None:
     """'Next free: 1d 07:59:52' -> timedelta. OCR now and then drops part of it, so only a reading with a whole
-    h:mm:ss clock counts; None if there isn't one (e.g. Advanced shows "Daily free recruitments: 5")."""
-    for _ in range(tries):
+    h:mm:ss clock counts; None if there isn't one (e.g. Advanced shows "Daily free recruitments: 5").
+    Tries spread over a few seconds, because the timer may still be redrawing just after a recruit."""
+    for i in range(tries):
+        if i:
+            time.sleep(1)
+            phone.forget_screen()
         text = phone.read_text(timer)
         if re.search(r"\d:\d\d:\d\d", text):
             return parse_duration(text)
-        phone.forget_screen()
     return None
