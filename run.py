@@ -224,8 +224,10 @@ def retry_at(job: Job) -> datetime:
     """After a failure (the game didn't open / log in, or the job failed): try again after retry_minutes, also for
     a job with fixed times (the only time a job runs outside its schedule). Its schedule never moves: a retry is
     never later than the next slot, and after a run that went well the next run is the next slot again."""
-    retry = utcnow() + timedelta(minutes=job.retry_minutes)
     slot = job.schedule.next_slot(utcnow()) if job.schedule else None
+    if job.retry_minutes is None and slot:                  # a job that doesn't retry: its next slot
+        return slot
+    retry = utcnow() + timedelta(minutes=job.retry_minutes or 30)
     return min(retry, slot) if slot else retry
 
 
@@ -242,8 +244,8 @@ def next_time(job: Job, result: object) -> datetime:
     if slot:
         return slot
     log.warning("job %s returned no next time and has no schedule; retrying in %s min",
-                job.name, job.retry_minutes)
-    return now + timedelta(minutes=job.retry_minutes)
+                job.name, job.retry_minutes or 30)
+    return now + timedelta(minutes=job.retry_minutes or 30)
 
 
 HAND_PAUSE = "paused by hand"

@@ -91,8 +91,8 @@ MERCHANT_BUY_BUTTON = (0.28, 0.61, 0.72, 0.67)  # ...its orange gem-price button
 MAIL_BUTTON = (0.8, 0.8, 1, 0.9)                # bottom right (town and world map): the mail envelope (templates/mail_button.png)
 MAIL_TABS = {"Alliance": (336, 293), "System": (538, 293), "Reports": (745, 293)}   # Mail: the tabs with rewards
 MAIL_CLAIM_ALL = (0.5, 0.95, 1, 1)              # Mail: "Read & Claim All" (bottom right; "Delete Read" left: never)
-ALLIANCE_CHESTS = (877, 1113)                   # Alliance screen: "Chests" button
-ALLIANCE_HELP = (877, 1713)                     # Alliance screen: "Help" button
+ALLIANCE_BUTTONS = (0, 0.3, 1, 0.85)            # Alliance screen: the button grid (War, Chests, ... Help). It moves
+                                                # up/down with the notice above it: buttons are found by their icons
 CHEST_TABS = {"Loot Chest": (287, 711), "Alliance Gift": (793, 711)}   # Chests: the two tabs
 CHEST_CLAIM_ALL = (0, 0.88, 1, 0.98)            # Chests: green "Claim All" (centre on Loot Chest, right on Alliance Gift)
 BIG_CHEST = (360, 260, 720, 470)                # Chests: the big chest's lid (pixels); glows (lid open, light) when it can open

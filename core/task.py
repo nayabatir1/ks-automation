@@ -12,7 +12,8 @@ job that is due runs in that session. A job says when it can run next by returni
     timedelta(hours=3, minutes=12)   -> 3h12m from now (e.g. a countdown read from the screen)
     a datetime                       -> exactly then (naive = config.SCHEDULE_TZ)
     None                             -> next slot of its schedule= (or retry_minutes if it has none)
-A failed job is retried after retry_minutes. A job that never ran is due straight away.
+A failed job is retried after retry_minutes (retry_minutes=None: never; it waits for its next slot).
+A job that never ran is due straight away.
 
 (A Task can also be a simple one-off with run() and schedule=; the runner still supports that.)
 """
@@ -35,7 +36,7 @@ if TYPE_CHECKING:
 log = logging.getLogger("task")
 
 
-def job(schedule: Schedule | None = None, *, priority: int = 100, timeout: int | None = None, retry_minutes: int = 30,
+def job(schedule: Schedule | None = None, *, priority: int = 100, timeout: int | None = None, retry_minutes: int | None = 30,
         enabled: bool = True) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Mark a function in a jobs/ file (or a Task method) as a job. See the module docstring."""
     def deco(func: Any) -> Any:
@@ -52,7 +53,7 @@ class Job:
     schedule: Schedule | None
     priority: int
     timeout: int | None
-    retry_minutes: int
+    retry_minutes: int | None
     enabled: bool
 
 

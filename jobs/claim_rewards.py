@@ -15,8 +15,7 @@ from core.schedule import At
 from core.task import job, run_parts
 from jobs.intel_mission import tap_to_exit
 from regions import (
-    ALLIANCE_CHESTS,
-    ALLIANCE_HELP,
+    ALLIANCE_BUTTONS,
     ALLIANCE_TITLE,
     BIG_CHEST,
     CHEST_CLAIM_ALL,
@@ -37,7 +36,8 @@ if TYPE_CHECKING:
     from game import Kingshot
 
 
-@job(schedule=At("00:05", "12:00", tz="UTC"), priority=115)   # 5:35am + 5:30pm IST, right after intel_mission (110)
+# 5:35am + 5:30pm IST, right after intel_mission (110). A failure isn't retried: it waits for the next slot.
+@job(schedule=At("00:05", "12:00", tz="UTC"), priority=115, retry_minutes=None)
 def claim_rewards(app: Kingshot, phone: Phone, log: Logger):
     run_parts(app, phone, log, {"mail_rewards": mail_rewards, "alliance_rewards": alliance_rewards,
                                 "help_members": help_members})
@@ -69,7 +69,7 @@ def alliance_rewards(app: Kingshot, phone: Phone, log: Logger):
     sits in a different place on each tab), then open the big chest while it glows (its badge number changes, so
     the glow decides). !! Never "Go" (shops) or the anonymous-gift checkbox."""
     open_alliance(app, phone, log)
-    phone.tap_xy(*ALLIANCE_CHESTS)
+    phone.tap(image="alliance_chests", region=ALLIANCE_BUTTONS, timeout=5)   # the chest icon
     phone.wait_for(text="Chests", region=SCREEN_TITLE, timeout=10)
     log.info("alliance chests open")
     for tab, xy in CHEST_TABS.items():
@@ -101,7 +101,7 @@ def help_members(app: Kingshot, phone: Phone, log: Logger):
     """Alliance -> Help -> "Help All" (helps every member's request; earns alliance tokens). Nothing to do when the
     button isn't there (nobody left to help). !! Never "View" (Auto-Help is a paid monthly card)."""
     open_alliance(app, phone, log)
-    phone.tap_xy(*ALLIANCE_HELP)
+    phone.tap(image="alliance_help", region=ALLIANCE_BUTTONS, timeout=5)     # the handshake icon
     phone.wait_for(text="Help", region=SCREEN_TITLE, timeout=10)
     try:
         phone.tap(text="Help All", region=HELP_ALL, timeout=3)
