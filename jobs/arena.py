@@ -1,4 +1,4 @@
-"""Kingshot job: arena. Daily at 23:53 UTC. Parts: pan_extra_intel_mission, then arena.
+"""Kingshot job: arena. Daily at 23:55 UTC. Parts: pan_extra_intel_mission, then arena.
 Test one part: run.py --job arena --part pan_extra_intel_mission
 
 Starts on the city screen or world map (bottom menu visible, no pop-up) — game.py's on_open/before_job
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from game import Kingshot
 
 
-@job(schedule=At("23:53", tz="UTC"))
+@job(schedule=At("23:55", tz="UTC"))
 def arena(app: Kingshot, phone: Phone, log: Logger):
     run_parts(app, phone, log, {"pan_extra_intel_mission": pan_extra_intel_mission, "arena": fight_arena})
 

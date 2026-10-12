@@ -1,4 +1,4 @@
-"""Kingshot job: collect stamina. 00:30 + 12:00 UTC (6am + 5:30pm IST), after dailies, before intel_mission.
+"""Kingshot job: collect stamina. 00:05 + 12:00 UTC (5:35am + 5:30pm IST), after dailies, before intel_mission.
 
 World map -> compass -> Intel Mission -> meat icon (top right) -> "Get More": tap Gourmet Feast's button if it's
 lit (grey = not ready yet), then close everything.
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from game import Kingshot
 
 
-@job(schedule=At("00:30", "12:00", tz="UTC"), priority=105)   # 6am + 5:30pm IST, after dailies
+@job(schedule=At("00:05", "12:00", tz="UTC"), priority=105)   # 5:35am + 5:30pm IST, after dailies
 def collect_stamina(app: Kingshot, phone: Phone, log: Logger):
     if phone.exists(text="World", region=NAV_REGION):            # on the town: the button names the world map
         phone.tap(text="World", region=NAV_REGION)

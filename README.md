@@ -62,13 +62,13 @@ Nothing is lost when it's off: code, `state.json` and logs stay.
 
 | Job | When (IST) | What it does |
 |---|---|---|
-| troops_training | 6:00 am, 5:30 pm | Barracks → Train page → Barracks / Stable / Range: 950 each when idle |
-| dailies | 6:00 am | parts: gems, vip, deals (+ Bank), nomadic_merchant, cassie_recruit, truegold_crucible |
-| collect_stamina | 6:00 am, 5:30 pm | Intel Mission → meat icon → Gourmet Feast when lit |
-| intel_mission | 6:00 am, 5:30 pm | claim ticked pins; tent Rescue, swords Conquer, bear/lion Attack (preset M1); never boss |
-| journey_supplies | 6:00 am, 5:30 pm | side panel → Realm Journey → "+" → free Claim |
-| claim_rewards | 6:00 am, 5:30 pm | parts: mail_rewards, alliance_rewards (chests + big chest), help_members |
-| arena | 5:23 am | parts: pan_extra_intel_mission, arena (fights until attempts are 0) |
+| troops_training | 5:35 am, 5:30 pm | Barracks → Train page → Barracks / Stable / Range: 950 each when idle |
+| dailies | 5:35 am | parts: gems, vip, deals (+ Bank), nomadic_merchant, cassie_recruit, truegold_crucible |
+| collect_stamina | 5:35 am, 5:30 pm | Intel Mission → meat icon → Gourmet Feast when lit |
+| intel_mission | 5:35 am, 5:30 pm | claim ticked pins; tent Rescue, swords Conquer, bear/lion Attack (preset M1); never boss |
+| journey_supplies | 5:35 am, 5:30 pm | side panel → Realm Journey → "+" → free Claim |
+| claim_rewards | 5:35 am, 5:30 pm | parts: mail_rewards, alliance_rewards (chests + big chest), help_members |
+| arena | 5:25 am | parts: pan_extra_intel_mission, arena (fights until attempts are 0) |
 | farming | every 7.5 h | Bread, Wood, Stone, Iron: Lv.8 tile → Gather (heroes 2 and 3 removed) → Deploy |
 | recruit_heroes | on the game's timer | free Advanced / Epic recruit |
 | online_rewards | on the chest timer | side panel → Online Rewards chest |
@@ -138,7 +138,7 @@ from core.schedule import At
 from core.task import job
 from regions import NAV_Q4, SCREEN_TITLE
 
-@job(schedule=At("00:30", "12:00", tz="UTC"), priority=110, timeout=600, enabled=True)
+@job(schedule=At("00:05", "12:00", tz="UTC"), priority=110, timeout=600, enabled=True)
 def my_job(app, phone, log):
     app.tap_on_main(phone, log, text="Alliance", region=NAV_Q4)       # first tap of a job (handles pop-ups)
     phone.wait_for(text="Alliance", region=SCREEN_TITLE, timeout=10)  # check the screen changed

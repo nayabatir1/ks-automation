@@ -1,4 +1,4 @@
-"""Kingshot job: claim journey supplies. 00:30 + 12:00 UTC (6am + 5:30pm IST), with intel_mission.
+"""Kingshot job: claim journey supplies. 00:05 + 12:00 UTC (5:35am + 5:30pm IST), with intel_mission.
 
 The free claim opens at 08:00 and 16:00 UTC; each run comes after one of those, so it finds one to claim.
 Side panel (works from the town or the world map) -> scroll to its bottom -> Realm Journey -> "+" by the supply
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from game import Kingshot
 
 
-@job(schedule=At("00:30", "12:00", tz="UTC"), priority=112)   # 6am + 5:30pm IST, after intel_mission (110)
+@job(schedule=At("00:05", "12:00", tz="UTC"), priority=112)   # 5:35am + 5:30pm IST, after intel_mission (110)
 def journey_supplies(app: Kingshot, phone: Phone, log: Logger):
     phone.tap(image="side_tab", region=LEFT_MID, timeout=10)
     phone.wait_for(text="Wilderness", region=SIDE_PANEL, timeout=10)
