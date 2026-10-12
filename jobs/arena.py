@@ -84,8 +84,9 @@ def fight_arena(app: Kingshot, phone: Phone, log: Logger):
     log.info("challenge list open")
     # !! "+" next to "Daily challenges: N" probably buys attempts (gems): never tap it.
 
-    # 5. attack until the daily attempts are used: the lowest-powered opponent weaker than me (power in green);
-    #    none -> Free Refresh (only if it's free); refreshes used up -> the lowest-powered red one. Each fight: Fight -> pause -> Retreat (ends it at once, as a
+    # 5. attack until the daily attempts are used, a different player each time where possible (see pick_opponent):
+    #    green (weaker than me) not yet attacked -> Free Refresh (only if it's free) -> red not yet attacked ->
+    #    only then someone a second time. Each fight: Fight -> pause -> Retreat (ends it at once, as a
     #    loss: the user's choice) -> tap anywhere to exit -> back to the Challenge List.
     #    !! Out of attempts the game offers more for gems: we stop at 0 and never tap "+" or anything with gems.
     attack_all(phone, log)
@@ -99,6 +100,7 @@ def fight_arena(app: Kingshot, phone: Phone, log: Logger):
 def attack_all(phone: Phone, log: Logger) -> None:
     """Fight until the daily attempts are used (see step 5 in arena())."""
     refreshes = 0
+    attacked: dict[tuple[int | None, int], int] = {}    # player (power, row y) -> times attacked this run
     for _ in range(MAX_FIGHTS):
         open_challenge_list(phone)
         left = attempts_left(phone)
@@ -106,18 +108,39 @@ def attack_all(phone: Phone, log: Logger) -> None:
         if not left:
             log.info("no attempts left; done for today")
             return
-        y = weakest_opponent(phone, log)
-        if y is None:
-            if refreshes < MAX_REFRESHES and free_refresh(phone, log):
-                refreshes += 1
-                continue
-            y = weakest_opponent(phone, log, red=True)             # refreshes used up: the weakest stronger one
-            if y is None:
-                log.info("no opponent found; done for now")
-                return
-            log.info("no green opponent and no free refresh: attacking the lowest red")
+        rows = opponents(phone)
+        log.info("opponents: %s", ", ".join(f"{'green' if g else 'red'} {p:,}" if p else f"{'green' if g else 'red'} ?"
+                                            for _, g, p in rows))
+        fresh_green = pick_opponent(rows, attacked, green=True, fresh=True)
+        if fresh_green is None and refreshes < MAX_REFRESHES and free_refresh(phone, log):
+            refreshes += 1
+            attacked.clear()                             # a new list: new players
+            continue
+        pick = (fresh_green or pick_opponent(rows, attacked, green=False, fresh=True)
+                or pick_opponent(rows, attacked))
+        if pick is None:
+            log.info("no opponent found; done for now")
+            return
+        y, green, power = pick
+        times = attacked.get((power, y), 0)
+        log.info("attacking %s %s%s", "green" if green else "red", f"{power:,}" if power else "?",
+                 f" (again: attacked {times}x already)" if times else "")
+        attacked[(power, y)] = times + 1
         fight(phone, log, y)
     log.info("stopped after %d fights (safety limit)", MAX_FIGHTS)
+
+
+def pick_opponent(rows: list[tuple[int, bool, int | None]], attacked: dict[tuple[int | None, int], int],
+                  green: bool | None = None, fresh: bool = False) -> tuple[int, bool, int | None] | None:
+    """The row to attack: the lowest power among the rows that match, or None.
+    green=True/False: only green/red rows; fresh=True: only players not attacked yet this run.
+    With neither: everyone, the least-attacked first, then green before red."""
+    pick = [(attacked.get((p, y), 0), not g, p if p is not None else 10**12, y, g, p) for y, g, p in rows
+            if (green is None or g == green) and not (fresh and (p, y) in attacked)]   # unreadable power: last
+    if not pick:
+        return None
+    *_, y, g, p = min(pick)
+    return y, g, p
 
 
 MAX_FIGHTS = 10            # safety limit per run (daily attempts are usually 4)
@@ -184,16 +207,6 @@ def power_value(img: Image, y: int) -> int | None:
     if any("M" in r for r in reads) or len(digits) <= 3:
         return int(digits) * 100_000                                 # 159 -> 15.9M
     return int(digits)
-
-
-def weakest_opponent(phone: Phone, log: Logger, red: bool = False) -> int | None:
-    """y of the lowest-powered green (weaker than me) opponent, or None if there isn't one.
-    red=True: the lowest-powered red one instead (used only once the free refreshes are gone)."""
-    rows = opponents(phone)
-    log.info("opponents: %s", ", ".join(f"{'green' if g else 'red'} {p:,}" if p else f"{'green' if g else 'red'} ?"
-                                        for _, g, p in rows))
-    pick = [(p if p is not None else 10**12, y) for y, g, p in rows if g != red]   # unreadable power: last choice
-    return min(pick)[1] if pick else None
 
 
 def open_challenge_list(phone: Phone) -> None:
