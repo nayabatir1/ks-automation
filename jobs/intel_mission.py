@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
+import pytesseract
 
 from core.phone import ElementNotFound
 from core.schedule import At
@@ -62,8 +63,11 @@ def intel_mission(app: Kingshot, phone: Phone, log: Logger):
     open_intel(app, phone, log)
     done = claims = 0
     skipped = set()
+    rechecked = False                                    # nothing found once: the map is opened again to be sure
     for _ in range(MAX_MISSIONS * 2):
         open_now, finished = pins(phone.screen())
+        log.info("intel: pins open %s, finished %s", [f"{k} ({x}, {y})" for k, x, y in open_now],
+                 [f"{k} ({x}, {y})" for k, x, y in finished])
         finished = [p for p in finished if (p[1] // 40, p[2] // 40) not in skipped]
         if finished:                                     # tap a ticked pin: its reward is claimed, it disappears
             kind, x, y = finished[0]
@@ -77,11 +81,24 @@ def intel_mission(app: Kingshot, phone: Phone, log: Logger):
                 claims += 1
             continue
         meat = read_meat(phone)
+        log.info("intel: %s meat", meat if meat is not None else "unreadable")
         if meat is not None and meat < MIN_MEAT:
             log.info("intel: only %d meat left; stopping", meat)
             break
         pin = next((p for p in open_now if (p[1] // 40, p[2] // 40) not in skipped), None)
-        if pin is None or done >= MAX_MISSIONS:
+        if pin is None and not rechecked:                # a reward pop-up may still cover the map: look again
+            log.info("intel: no open pins seen; opening the map again to check")
+            tap_to_exit(phone, wait=1.5)
+            back_to_world(phone)
+            open_intel(app, phone, log)
+            rechecked = True
+            continue
+        if pin is None:
+            log.info("intel: no open pins left%s", f" (skipped {len(skipped)})" if skipped else "")
+            break
+        rechecked = False
+        if done >= MAX_MISSIONS:
+            log.info("intel: %d missions done; stopping (safety limit)", done)
             break
         kind, x, y = pin
         if do_mission(phone, log, kind, x, y):
@@ -101,7 +118,14 @@ def open_intel(app: Kingshot, phone: Phone, log: Logger):
 
 
 def read_meat(phone: Phone) -> int | None:
-    digits = re.sub(r"\D", "", phone.read_text(INTEL_MEAT))
+    """The meat number (white digits on a dark bar, top right): only the white pixels are read, digits only."""
+    part, _ = crop(phone.screen(), INTEL_MEAT)
+    hsv = cv2.cvtColor(part, cv2.COLOR_BGR2HSV)
+    mask = ((hsv[:, :, 1] < 60) & (hsv[:, :, 2] > 200)).astype(np.uint8) * 255
+    big = cv2.resize(255 - mask, None, fx=3, fy=3, interpolation=cv2.INTER_NEAREST)
+    big = cv2.copyMakeBorder(big, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255)
+    digits = re.sub(r"\D", "", pytesseract.image_to_string(
+        big, config="--psm 7 -c tessedit_char_whitelist=0123456789"))
     return int(digits) if digits else None
 
 
