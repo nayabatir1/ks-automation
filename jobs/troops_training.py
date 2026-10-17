@@ -7,6 +7,7 @@ tabs switch between Barracks / Stable / Range; on each: quantity 950 -> Train. A
 """
 from __future__ import annotations
 
+import re
 import time
 from typing import TYPE_CHECKING
 
@@ -31,13 +32,15 @@ if TYPE_CHECKING:
     from core.phone import Phone
     from game import Kingshot
 
+TROOP_TITLE = re.compile(r"Apex|Truegold")   # training page title: "Apex Infantry", "Truegold Archers", ...
 QUANTITY = 950
 QTY_BOX = (810, 1892)             # the quantity box
 
 
 @job(schedule=At("00:05", "12:00", tz="UTC"), priority=90)   # 5:35am + 5:30pm IST, first in those sessions
 def troops_training(app: Kingshot, phone: Phone, log: Logger):
-    x, y = go_to_building(phone, log, "Barracks", view=app.town_from_launch(phone, log))
+    x, y = go_to_building(phone, log, "Barracks", view=app.town_from_launch(phone, log),
+                          unblock=lambda: app.close_popups(phone, log, timeout=5))   # e.g. a late "Welcome back!"
     if abs(x - 540) > 100:                               # its tap menu reaches ~300 px right: centre it first
         drag(phone, x - 540, 0)
         m = find_building(phone, "Barracks")
@@ -51,7 +54,7 @@ def troops_training(app: Kingshot, phone: Phone, log: Logger):
     waits = []
     for tab, xy in TRAIN_TABS.items():
         phone.tap_xy(*xy)
-        phone.wait_for(text="Apex", region=TRAIN_TITLE, timeout=10)
+        phone.wait_for(text=TROOP_TITLE, region=TRAIN_TITLE, timeout=10)
         time.sleep(1.5)                                  # the page settles (it can show "Train" for a moment)
         phone.forget_screen()
         if phone.exists(text="Training", region=TRAIN_TIMER):
@@ -83,7 +86,7 @@ def open_training(phone: Phone, x: int, y: int) -> None:
     else:
         raise ElementNotFound("the Barracks menu (Details / Upgrade / Train) didn't show")
     phone.tap_xy(m.center[0], m.center[1] - 88)         # the hexagon icon above its label
-    phone.wait_for(text="Apex", region=TRAIN_TITLE, timeout=10)
+    phone.wait_for(text=TROOP_TITLE, region=TRAIN_TITLE, timeout=10)
 
 
 def set_quantity(phone: Phone) -> None:

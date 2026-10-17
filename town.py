@@ -13,6 +13,7 @@ import json
 import re
 import threading
 import time
+from collections.abc import Callable
 from logging import Logger
 from pathlib import Path
 
@@ -111,10 +112,11 @@ def find_building(phone: Phone, name: str) -> vision.Match | None:
 
 
 def go_to_building(phone: Phone, log: Logger, name: str, view: tuple[float, float] | None = None,
-                   tries: int = 6) -> tuple[int, int]:
+                   tries: int = 6, unblock: Callable[[], object] | None = None) -> tuple[int, int]:
     """Bring a town building on screen; returns the screen point to tap it. Raises ElementNotFound.
 
-    view: where the view is, if known: (0, 0) right after a fresh launch (Town Center centred)."""
+    view: where the view is, if known: (0, 0) right after a fresh launch (Town Center centred).
+    unblock: called when no building names can be read (a late pop-up may cover the town), e.g. close pop-ups."""
     if name not in TOWN:
         raise ValueError(f"{name!r} is not on the town map (screens/town.json)")
     if not (Path(__file__).parent / f"templates/{template(name)}.png").exists():
@@ -144,6 +146,11 @@ def go_to_building(phone: Phone, log: Logger, name: str, view: tuple[float, floa
         seen = where(names)
         if seen is None:
             log.info("%s not on screen and no names read; looking again", name)
+            if unblock:
+                try:
+                    unblock()
+                except ElementNotFound:                   # nothing it knows showed: just look again
+                    pass
             time.sleep(0.5)
             view = None
             continue
