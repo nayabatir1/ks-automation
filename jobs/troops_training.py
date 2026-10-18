@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from game import Kingshot
 
 TROOP_TITLE = re.compile(r"Apex|Truegold")   # training page title: "Apex Infantry", "Truegold Archers", ...
-QUANTITY = 950
+QUANTITY = 820
 QTY_BOX = (810, 1892)             # the quantity box
 
 
