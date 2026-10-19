@@ -16,6 +16,7 @@ NAV_Q4 = (0.5, 0.95, 1, 1)                      # ...its Q4 half: Shop Alliance 
 NAV_Q3 = (0, 0.95, 0.5, 1)                      # ...its Q3 half: Conquest Heroes Backpack
 LEFT_MID = (0, 0.33, 0.25, 0.67)                # left edge, middle third of the height
 SIDE_PANEL = (0, 0.25, 0.65, 0.7)               # the panel the side tab opens (left side)
+SIDE_PANEL_DAILY_TAB = (553, 669)               # side panel: the "Daily" tab (right of Town / Wilderness)
 PANEL_TAB = (0.5, 0.38, 0.8, 0.56)              # the open panel's "<" tab (right edge of the panel)
 CHEST_TIMER = (0.2, 0.78, 0.8, 0.88)            # online rewards: "Next Chest Ready In:" + countdown
 BLANK_SPOT = (0.5, 0.12)                        # tap here to close a reward screen (dimmed area, no buttons)

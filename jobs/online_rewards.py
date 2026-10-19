@@ -1,4 +1,6 @@
 """Kingshot job: online rewards.
+World map -> side panel -> Daily tab: "Online Rewards" is listed only while a chest is ready; its green tick
+claims it, then the chest screen tells when the next one is ready. Not listed: look again later.
 
 Starts on the city screen or world map (bottom menu visible, no pop-up) — game.py's on_open/before_job
 see to that.
@@ -9,9 +11,13 @@ import time
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
+import cv2
+import numpy as np
+
 from core.phone import ElementNotFound
 from core.schedule import utcnow
 from core.task import job
+from core.vision import median_hue
 from regions import (
     BLANK_SPOT,
     CHEST_TIMER,
@@ -20,15 +26,18 @@ from regions import (
     PANEL_TAB,
     Q4,
     SIDE_PANEL,
+    SIDE_PANEL_DAILY_TAB,
 )
 
 if TYPE_CHECKING:
     from logging import Logger
 
     from core.phone import Phone
+    from core.vision import Image
     from game import Kingshot
 
 NO_REWARD_RETRY = timedelta(minutes=30)
+TICK_X = 606                 # the green tick at the right end of the Online Rewards row
 
 
 def no_reward_yet(app: Kingshot, log: Logger) -> datetime | timedelta:
@@ -60,7 +69,7 @@ def online_rewards(app: Kingshot, phone: Phone, log: Logger):
         phone.wait_for(text="Town", region=NAV_REGION, timeout=15)
         log.info("on the world map")
 
-    # 2. side tab ">" on the left edge, middle of the screen -> side panel (header tabs Town / Wilderness).
+    # 2. side tab ">" on the left edge, middle of the screen -> side panel (tabs Town / Wilderness / Daily).
     #    Skip if the panel is already open (the tab is hidden then).
     if phone.wait_any({"text": "Wilderness", "region": SIDE_PANEL},
                       {"image": "side_tab", "region": LEFT_MID}, timeout=10) == 0:
@@ -70,35 +79,46 @@ def online_rewards(app: Kingshot, phone: Phone, log: Logger):
         phone.wait_for(text="Wilderness", region=SIDE_PANEL, timeout=10)
         log.info("side panel open")
 
-    # 3. "Online Rewards" sits just above "Water Essence Gathering", and is only there while a chest is ready.
-    #    So: scroll to Water Essence (always there), then look in the space above it.
-    try:
-        water = phone.scroll_to(text="Water Essence", region=SIDE_PANEL, max_swipes=8)
-    except ElementNotFound:          # panel was left scrolled further down
-        water = phone.scroll_to(text="Water Essence", region=SIDE_PANEL, direction="up", max_swipes=8)
-    panel_top = int(SIDE_PANEL[1] * phone.height)
-    if water.y - panel_top < 300:    # too close to the top: the space above it is cut off, show a bit more
-        phone.swipe(water.center[0], water.y, water.center[0], water.y + 300, ms=400)
-        time.sleep(0.4)
-        water = phone.wait_for(text="Water Essence", region=SIDE_PANEL, timeout=5)
-    above_water = (SIDE_PANEL[0], SIDE_PANEL[1], SIDE_PANEL[2], water.y / phone.height)
-    m = phone.find(text="Online Rewards", region=above_water)
+    # 3. the Daily tab (its label doesn't OCR: tapped by position; the chosen tab is the bright one)
+    for _ in range(3):
+        if daily_tab_chosen(phone.screen()):
+            break
+        phone.tap_xy(*SIDE_PANEL_DAILY_TAB)
+        time.sleep(1.5)
+        phone.forget_screen()
+    else:
+        raise ElementNotFound("the side panel's Daily tab didn't open")
+    log.info("daily tab open")
+
+    # 4. "Online Rewards" (under My Rewards, at the top) is only listed while a chest is ready
+    m = phone.find(text="Online Rewards", region=SIDE_PANEL)
     if not m:
         close_panel(phone)
         return no_reward_yet(app, log)
     log.info("found Online Rewards at %s", m.center)
 
-    # 4. tap the Online Rewards box -> chest screen with "Next Chest Ready In: 00:00:27"
-    phone.tap_xy(*m.center)
+    # 5. its green tick (right end of the row) claims the chest -> chest screen with "Next Chest Ready In: 01:47:56"
+    tick = (TICK_X, m.center[1] + 23)
+    hue = median_hue(phone.last_screen, (tick[0] - 35, tick[1] - 30, tick[0] + 35, tick[1] + 30))
+    if not 65 <= hue <= 86:                               # green tick ~79; the teal arrow buttons ~92
+        raise RuntimeError(f"Online Rewards: no green tick at {tick} (hue {hue:.0f}); not tapping")
+    phone.tap_xy(*tick)
     phone.wait_for(text="Next Chest Ready", region=CHEST_TIMER, timeout=10)
-    log.info("online rewards screen open")
+    log.info("online reward claimed")
 
-    # 5. record when the next chest is ready, then tap a blank spot to close the chest screen
+    # 6. record when the next chest is ready, then tap a blank spot: that closes the chest screen and the panel
     wait = phone.read_duration(region=CHEST_TIMER)
     if wait is None:
         raise RuntimeError("could not read the 'Next Chest Ready In' countdown")
     log.info("next chest in %s", wait)
     phone.tap_xy(*BLANK_SPOT)
     phone.wait_gone(text="Next Chest Ready", region=CHEST_TIMER, timeout=10)
-    close_panel(phone)
-    return wait + timedelta(seconds=10)      # a little after it's ready
+    close_panel(phone)                                    # usually already closed
+    return wait + timedelta(seconds=10)                   # a little after it's ready
+
+
+def daily_tab_chosen(img: Image) -> bool:
+    """The chosen tab is bright (median brightness ~180); the others are dark (~99)."""
+    x, y = SIDE_PANEL_DAILY_TAB
+    hsv = cv2.cvtColor(img[y - 30:y + 30, x - 90:x + 90], cv2.COLOR_BGR2HSV)
+    return float(np.median(hsv[:, :, 2])) > 140
