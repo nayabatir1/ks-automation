@@ -11,6 +11,7 @@ import time
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
+import config
 from core.task import job
 from core.timeparse import parse_duration
 from core.vision import median_hue
@@ -33,7 +34,6 @@ if TYPE_CHECKING:
     from game import Kingshot
 
 TAP_TO_EXIT = (0.2, 0.84, 0.8, 0.88)  # Rewards screen: "Tap anywhere to exit" (an orange paid Recruit x1 sits above it)
-UNREAD_RETRY = timedelta(minutes=30)  # a timer that didn't read: look again this soon, so its free recruit isn't missed
 
 
 @job()
@@ -58,7 +58,7 @@ def recruit_heroes(app: Kingshot, phone: Phone, log: Logger):
     if not read:
         raise RuntimeError("could not read either 'Next free' timer")
     if len(read) < len(waits):  # one timer unread: its free recruit may come before the other's
-        return min(*read, UNREAD_RETRY)
+        return min(*read, timedelta(minutes=config.RETRY_MINUTES))
     return min(read) + timedelta(seconds=10)
 
 

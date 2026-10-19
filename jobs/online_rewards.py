@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 import cv2
 import numpy as np
 
+import config
 from core.phone import ElementNotFound
 from core.schedule import utcnow
 from core.task import job
@@ -37,7 +38,6 @@ if TYPE_CHECKING:
     from core.vision import Image
     from game import Kingshot
 
-NO_REWARD_RETRY = timedelta(minutes=30)
 TICK_X = 606  # the green tick at the right end of the Online Rewards row
 
 
@@ -47,8 +47,8 @@ def no_reward_yet(app: Kingshot, log: Logger) -> datetime | timedelta:
     if known and known > utcnow():
         log.info("no online reward ready yet; keeping the known chest time")
         return known
-    log.info("no online reward ready yet; checking again in %s", NO_REWARD_RETRY)
-    return NO_REWARD_RETRY
+    log.info("no online reward ready yet; checking again in %d min", config.RETRY_MINUTES)
+    return timedelta(minutes=config.RETRY_MINUTES)
 
 
 def close_panel(phone: Phone) -> None:
@@ -112,7 +112,13 @@ def online_rewards(app: Kingshot, phone: Phone, log: Logger):
     log.info("online reward claimed")
 
     # 6. record when the next chest is ready, then tap a blank spot: that closes the chest screen and the panel
-    wait = phone.read_duration(region=CHEST_TIMER)
+    wait = None
+    for _ in range(8):  # the countdown is drawn a moment after "Next Chest Ready" shows
+        wait = phone.read_duration(region=CHEST_TIMER)
+        if wait is not None:
+            break
+        time.sleep(0.5)
+        phone.forget_screen()
     if wait is None:
         raise RuntimeError("could not read the 'Next Chest Ready In' countdown")
     log.info("next chest in %s", wait)

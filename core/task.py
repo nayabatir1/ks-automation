@@ -12,7 +12,7 @@ job that is due runs in that session. A job says when it can run next by returni
     timedelta(hours=3, minutes=12)   -> 3h12m from now (e.g. a countdown read from the screen)
     a datetime                       -> exactly then (naive = config.SCHEDULE_TZ)
     None                             -> next slot of its schedule= (or retry_minutes if it has none)
-A failed job is retried after retry_minutes (retry_minutes=None: never; it waits for its next slot).
+A failed job is retried after retry_minutes (default config.RETRY_MINUTES; None: never, it waits for its next slot).
 A job that never ran is due straight away.
 
 (A Task can also be a simple one-off with run() and schedule=; the runner still supports that.)
@@ -30,6 +30,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+import config
+
 if TYPE_CHECKING:
     from core.phone import Phone
     from core.schedule import Schedule
@@ -42,7 +44,7 @@ def job(
     *,
     priority: int = 100,
     timeout: int | None = None,
-    retry_minutes: int | None = 30,
+    retry_minutes: int | None = config.RETRY_MINUTES,
     enabled: bool = True,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Mark a function in a jobs/ file (or a Task method) as a job. See the module docstring."""

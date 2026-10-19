@@ -62,3 +62,8 @@ PAUSE_FILE = BASE_DIR / "pause.json"  # while it exists (and hasn't expired) no 
 # was logged in on another device (you're playing on your own phone).
 DEFAULT_PAUSE_MINUTES = 60
 SESSION_TAKEN_PAUSE_MINUTES = 60
+
+# --- jobs ---------------------------------------------------------------------
+# Minutes until a failed job is tried again (every job; a job can override it with retry_minutes=). Also how
+# soon online_rewards looks again when no chest is listed, and recruit_heroes when a timer didn't read.
+RETRY_MINUTES = 10

@@ -83,8 +83,8 @@ Rules every job follows:
 - **Never** taps anything that costs real money or gems (₹ prices, TOP UP, "Buy", paid refreshes).
   The one exception the user chose: the Nomadic Merchant's **VIP XP** box is bought with gems.
 - Checks a button's text and colour before tapping it; if the screen isn't what it expects, it stops.
-- A failed job retries after 30 min (never later than its next scheduled time). Otherwise fixed-time jobs run
-  only at their times.
+- A failed job retries after `RETRY_MINUTES` minutes (config.py; never later than its next scheduled time).
+  Otherwise fixed-time jobs run only at their times.
 - Ends where it started (town or world map); the game is closed after the session.
 
 ---
@@ -127,8 +127,9 @@ state.json          per job: last run (UTC), status, error, next_at  (you can ed
    - save its next run time in `state.json`.
 6. If the next job is due within 10 s keep the game open, otherwise close it and put the phone to sleep.
 
-A job that fails gets a screenshot in `logs/failures/` and a retry in 30 min; the game is relaunched before the
-next job. A job may run at most `timeout` seconds (default 240, set in game.py; long jobs set their own).
+A job that fails gets a screenshot in `logs/failures/` and a retry after `RETRY_MINUTES` (config.py); the game is
+relaunched before the next job. A job may run at most `timeout` seconds (default 240, set in game.py; long jobs
+set their own).
 
 ### A job file
 
@@ -149,7 +150,8 @@ def my_job(app, phone, log):
 ```
 
 - `@job(...)` options: `schedule=` (At / Every / Cron; leave out if the job returns its own next time),
-  `priority=` (order within a session), `timeout=` (seconds), `retry_minutes=` (default 30), `enabled=`.
+  `priority=` (order within a session), `timeout=` (seconds), `retry_minutes=` (default `config.RETRY_MINUTES`;
+  None = never retry), `enabled=`.
 - `app` is the Kingshot object from game.py, `phone` is core/phone.py's Phone, `log` is a logger.
 - The file is picked up automatically (no registration). Files starting with `_` are ignored.
 - **Jobs made of parts** (dailies, arena, claim_rewards): one function per part, then

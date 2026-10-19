@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from game import Kingshot
 
 
-@job(retry_minutes=30)
+@job()
 def my_job(app: Kingshot, phone: Phone, log: Logger):
     phone.tap(image="some_icon", region=Q4, timeout=10)  # templates/some_icon.png
     phone.wait_for(text="Some title", timeout=10)  # confirm the screen changed

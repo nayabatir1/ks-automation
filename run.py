@@ -235,7 +235,7 @@ def retry_at(job: Job) -> datetime:
     slot = job.schedule.next_slot(utcnow()) if job.schedule else None
     if job.retry_minutes is None and slot:  # a job that doesn't retry: its next slot
         return slot
-    retry = utcnow() + timedelta(minutes=job.retry_minutes or 30)
+    retry = utcnow() + timedelta(minutes=job.retry_minutes or config.RETRY_MINUTES)
     return min(retry, slot) if slot else retry
 
 
@@ -252,9 +252,11 @@ def next_time(job: Job, result: object) -> datetime:
     if slot:
         return slot
     log.warning(
-        "job %s returned no next time and has no schedule; retrying in %s min", job.name, job.retry_minutes or 30
+        "job %s returned no next time and has no schedule; retrying in %s min",
+        job.name,
+        job.retry_minutes or config.RETRY_MINUTES,
     )
-    return now + timedelta(minutes=job.retry_minutes or 30)
+    return now + timedelta(minutes=job.retry_minutes or config.RETRY_MINUTES)
 
 
 HAND_PAUSE = "paused by hand"
