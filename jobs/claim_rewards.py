@@ -3,6 +3,7 @@ Parts: mail_rewards, alliance_rewards, help_members.
 Test one part: run.py --job claim_rewards --part alliance_rewards
 Starts on the city screen or world map; after_job backs out to where it started.
 """
+
 from __future__ import annotations
 
 import time
@@ -39,8 +40,12 @@ if TYPE_CHECKING:
 # 5:35am + 5:30pm IST, right after intel_mission (110). A failure isn't retried: it waits for the next slot.
 @job(schedule=At("00:05", "12:00", tz="UTC"), priority=115, retry_minutes=None)
 def claim_rewards(app: Kingshot, phone: Phone, log: Logger):
-    run_parts(app, phone, log, {"mail_rewards": mail_rewards, "alliance_rewards": alliance_rewards,
-                                "help_members": help_members})
+    run_parts(
+        app,
+        phone,
+        log,
+        {"mail_rewards": mail_rewards, "alliance_rewards": alliance_rewards, "help_members": help_members},
+    )
 
 
 def mail_rewards(app: Kingshot, phone: Phone, log: Logger):
@@ -59,9 +64,9 @@ def mail_rewards(app: Kingshot, phone: Phone, log: Logger):
             log.info("mail, %s: no Read & Claim All", tab)
             continue
         time.sleep(1.5)
-        tap_to_exit(phone, wait=3)                       # the Rewards pop-up, if anything was claimed
+        tap_to_exit(phone, wait=3)  # the Rewards pop-up, if anything was claimed
         log.info("mail, %s: read & claimed all", tab)
-    phone.back()                                         # Mail -> city / world map
+    phone.back()  # Mail -> city / world map
 
 
 def alliance_rewards(app: Kingshot, phone: Phone, log: Logger):
@@ -69,7 +74,7 @@ def alliance_rewards(app: Kingshot, phone: Phone, log: Logger):
     sits in a different place on each tab), then open the big chest while it glows (its badge number changes, so
     the glow decides). !! Never "Go" (shops) or the anonymous-gift checkbox."""
     open_alliance(app, phone, log)
-    phone.tap(image="alliance_chests", region=ALLIANCE_BUTTONS, timeout=5)   # the chest icon
+    phone.tap(image="alliance_chests", region=ALLIANCE_BUTTONS, timeout=5)  # the chest icon
     phone.wait_for(text="Chests", region=SCREEN_TITLE, timeout=10)
     log.info("alliance chests open")
     for tab, xy in CHEST_TABS.items():
@@ -82,9 +87,9 @@ def alliance_rewards(app: Kingshot, phone: Phone, log: Logger):
             log.info("chests, %s: no Claim All", tab)
             continue
         time.sleep(1.5)
-        tap_to_exit(phone, wait=3)                       # the Rewards pop-up, if anything was claimed
+        tap_to_exit(phone, wait=3)  # the Rewards pop-up, if anything was claimed
         log.info("chests, %s: claimed all", tab)
-    for n in range(10):                                  # big chest: open while it glows
+    for n in range(10):  # big chest: open while it glows
         phone.forget_screen()
         if not chest_glowing(phone.screen()):
             break
@@ -93,15 +98,15 @@ def alliance_rewards(app: Kingshot, phone: Phone, log: Logger):
         time.sleep(2)
         tap_to_exit(phone, wait=3)
         log.info("chests: big chest opened (%d)", n + 1)
-    phone.back()                                         # Chests -> Alliance
-    phone.back()                                         # Alliance -> city / world map
+    phone.back()  # Chests -> Alliance
+    phone.back()  # Alliance -> city / world map
 
 
 def help_members(app: Kingshot, phone: Phone, log: Logger):
     """Alliance -> Help -> "Help All" (helps every member's request; earns alliance tokens). Nothing to do when the
     button isn't there (nobody left to help). !! Never "View" (Auto-Help is a paid monthly card)."""
     open_alliance(app, phone, log)
-    phone.tap(image="alliance_help", region=ALLIANCE_BUTTONS, timeout=5)     # the handshake icon
+    phone.tap(image="alliance_help", region=ALLIANCE_BUTTONS, timeout=5)  # the handshake icon
     phone.wait_for(text="Help", region=SCREEN_TITLE, timeout=10)
     try:
         phone.tap(text="Help All", region=HELP_ALL, timeout=3)
@@ -109,8 +114,8 @@ def help_members(app: Kingshot, phone: Phone, log: Logger):
         log.info("help: helped all")
     except ElementNotFound:
         log.info("help: nobody to help")
-    phone.back()                                         # Help -> Alliance
-    phone.back()                                         # Alliance -> city / world map
+    phone.back()  # Help -> Alliance
+    phone.back()  # Alliance -> city / world map
 
 
 def open_alliance(app: Kingshot, phone: Phone, log: Logger):

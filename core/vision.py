@@ -9,6 +9,7 @@ OCR runs in two passes:
             drops big blobs and thin frames (button outlines, panels), then OCRs that as
             black-on-white. Words it finds that the normal pass missed are added.
 """
+
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,21 +20,22 @@ import pytesseract
 
 import config
 
-Image = np.ndarray                          # an OpenCV BGR screenshot, or a piece of one
+Image = np.ndarray  # an OpenCV BGR screenshot, or a piece of one
 Region = tuple[float, float, float, float]  # (x1, y1, x2, y2): pixels, or fractions of the screen (0-1)
-TextTarget = str | re.Pattern[str]          # text to look for: plain (case/OCR-slip tolerant) or a regex
+TextTarget = str | re.Pattern[str]  # text to look for: plain (case/OCR-slip tolerant) or a regex
 
 
 @dataclass
 class Match:
     """Something found on screen. x, y, w, h = bounding box in screen pixels."""
+
     x: int
     y: int
     w: int
     h: int
-    score: float          # OCR confidence 0-100, or template score 0-1
-    text: str = ""        # what was read (OCR) or template name (image)
-    source: str = ""      # "normal" / "light" (OCR pass) or "image"
+    score: float  # OCR confidence 0-100, or template score 0-1
+    text: str = ""  # what was read (OCR) or template name (image)
+    source: str = ""  # "normal" / "light" (OCR pass) or "image"
 
     @property
     def center(self) -> tuple[int, int]:
@@ -84,8 +86,7 @@ def crop(img: Image, region: Region | None) -> tuple[Image, tuple[int, int]]:
 
 # ------------------------------------------------------------------ OCR
 def _tesseract_words(gray: Image, offset: tuple[int, int], source: str) -> list[Match]:
-    data = pytesseract.image_to_data(gray, lang=config.OCR_LANG, config="--psm 11",
-                                     output_type=pytesseract.Output.DICT)
+    data = pytesseract.image_to_data(gray, lang=config.OCR_LANG, config="--psm 11", output_type=pytesseract.Output.DICT)
     ox, oy = offset
     words = []
     for i, txt in enumerate(data["text"]):
@@ -93,10 +94,11 @@ def _tesseract_words(gray: Image, offset: tuple[int, int], source: str) -> list[
         conf = float(data["conf"][i])
         if not txt or conf < config.OCR_MIN_CONF:
             continue
-        if not re.search(r"\w", txt):           # lone punctuation is almost always noise
+        if not re.search(r"\w", txt):  # lone punctuation is almost always noise
             continue
-        words.append(Match(data["left"][i] + ox, data["top"][i] + oy,
-                           data["width"][i], data["height"][i], conf, txt, source))
+        words.append(
+            Match(data["left"][i] + ox, data["top"][i] + oy, data["width"][i], data["height"][i], conf, txt, source)
+        )
     return words
 
 
@@ -108,19 +110,19 @@ def light_text_mask(bgr: Image) -> Image:
     h, w = light.shape
     n, labels, stats, _ = cv2.connectedComponentsWithStats(light, connectivity=8)
     keep: np.ndarray = np.zeros(n, bool)
-    max_char_h = min(h, 150)                               # letters are < 150 px tall at 1080x2340
+    max_char_h = min(h, 150)  # letters are < 150 px tall at 1080x2340
     for i in range(1, n):
         _, _, cw, ch, area = stats[i]
-        if area < 6:                                       # specks
+        if area < 6:  # specks
             continue
-        if ch > max_char_h or cw > w * 0.5:                # panels, bars, big shapes
+        if ch > max_char_h or cw > w * 0.5:  # panels, bars, big shapes
             continue
-        if cw > 3 * ch and ch <= 4:                        # thin horizontal line (outline edge)
+        if cw > 3 * ch and ch <= 4:  # thin horizontal line (outline edge)
             continue
-        if ch > 3 * cw and cw <= 4 and ch > 40:            # thin vertical line (outline edge)
+        if ch > 3 * cw and cw <= 4 and ch > 40:  # thin vertical line (outline edge)
             continue
         fill = area / float(cw * ch)
-        if cw * ch > 2500 and fill < 0.15:                 # hollow frame = button outline
+        if cw * ch > 2500 and fill < 0.15:  # hollow frame = button outline
             continue
         keep[i] = True
     mask = keep[np.asarray(labels, dtype=np.intp)].astype(np.uint8) * 255
@@ -181,8 +183,9 @@ def merge(words: list[Match]) -> Match:
     y1 = min(w.y for w in words)
     x2 = max(w.x + w.w for w in words)
     y2 = max(w.y + w.h for w in words)
-    return Match(x1, y1, x2 - x1, y2 - y1, min(w.score for w in words),
-                 " ".join(w.text for w in words), words[0].source)
+    return Match(
+        x1, y1, x2 - x1, y2 - y1, min(w.score for w in words), " ".join(w.text for w in words), words[0].source
+    )
 
 
 def ocr_lines(img: Image, region: Region | None = None, passes: tuple[str, ...] = ("normal", "light")) -> list[Match]:
@@ -208,11 +211,10 @@ def find_text(img: Image, text: TextTarget, region: Region | None = None) -> Mat
             # shortest run of consecutive words containing the text
             for i in range(len(line)):
                 for j in range(i, len(line)):
-                    joined = " ".join(w.text for w in line[i:j + 1])
-                    hit = (text.search(joined) if isinstance(text, re.Pattern)
-                           else _norm(text) in _norm(joined))
+                    joined = " ".join(w.text for w in line[i : j + 1])
+                    hit = text.search(joined) if isinstance(text, re.Pattern) else _norm(text) in _norm(joined)
                     if hit:
-                        m = merge(line[i:j + 1])
+                        m = merge(line[i : j + 1])
                         if best is None or (m.w * m.h < best.w * best.h):
                             best = m
                         break
@@ -239,8 +241,13 @@ def load_template(name_or_path: str | Path) -> tuple[Image, str]:
     return _template_cache[p], p.stem
 
 
-def find_image(img: Image, image: str | Path, region: Region | None = None, threshold: float | None = None,
-               scales: tuple[float, ...] = (1.0,)) -> Match | None:
+def find_image(
+    img: Image,
+    image: str | Path,
+    region: Region | None = None,
+    threshold: float | None = None,
+    scales: tuple[float, ...] = (1.0,),
+) -> Match | None:
     """Find a template image (templates/NAME.png) on screen. Returns Match or None.
 
     Templates cut from the phone's own screenshots (tools.py crop / tools.py template) match at
@@ -252,8 +259,11 @@ def find_image(img: Image, image: str | Path, region: Region | None = None, thre
     gray_tmpl = cv2.cvtColor(tmpl, cv2.COLOR_BGR2GRAY)
     best = None
     for s in scales:
-        t = gray_tmpl if s == 1.0 else cv2.resize(
-            gray_tmpl, None, fx=s, fy=s, interpolation=cv2.INTER_AREA if s < 1 else cv2.INTER_CUBIC)
+        t = (
+            gray_tmpl
+            if s == 1.0
+            else cv2.resize(gray_tmpl, None, fx=s, fy=s, interpolation=cv2.INTER_AREA if s < 1 else cv2.INTER_CUBIC)
+        )
         th, tw = t.shape[:2]
         if th < 8 or tw < 8 or gray_part.shape[0] < th or gray_part.shape[1] < tw:
             continue
@@ -311,17 +321,24 @@ def red_dots(img: Image, region: Region | None = None) -> list[tuple[int, int]]:
     hsv = cv2.cvtColor(part, cv2.COLOR_BGR2HSV)
     red = ((hsv[:, :, 0] < 8) | (hsv[:, :, 0] > 172)) & (hsv[:, :, 1] > 170) & (hsv[:, :, 2] > 200)
     n, _, stats, centres = cv2.connectedComponentsWithStats(red.astype(np.uint8))
-    dots = [(ox + int(centres[k][0]), oy + int(centres[k][1])) for k in range(1, n)
-            if 250 < stats[k][4] < 1500 and 0.7 < stats[k][2] / stats[k][3] < 1.4
-            and stats[k][4] > 0.6 * stats[k][2] * stats[k][3]]
+    dots = [
+        (ox + int(centres[k][0]), oy + int(centres[k][1]))
+        for k in range(1, n)
+        if 250 < stats[k][4] < 1500
+        and 0.7 < stats[k][2] / stats[k][3] < 1.4
+        and stats[k][4] > 0.6 * stats[k][2] * stats[k][3]
+    ]
     return sorted(dots, key=lambda d: (d[1] // 30, d[0]))
 
 
 def screen_diff(a: Image, b: Image, region: Region | None = None) -> float:
     """Mean pixel difference (0-255) between two screenshots, on a small greyscale version."""
+
     def small(im: Image) -> np.ndarray:
         part, _ = crop(im, region)
         h, w = part.shape[:2]
-        return cv2.resize(cv2.cvtColor(part, cv2.COLOR_BGR2GRAY), (max(1, w // 10), max(1, h // 10)),
-                          interpolation=cv2.INTER_AREA).astype(np.int16)
+        return cv2.resize(
+            cv2.cvtColor(part, cv2.COLOR_BGR2GRAY), (max(1, w // 10), max(1, h // 10)), interpolation=cv2.INTER_AREA
+        ).astype(np.int16)
+
     return float(np.abs(small(a) - small(b)).mean())

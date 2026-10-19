@@ -17,6 +17,7 @@ A job that never ran is due straight away.
 
 (A Task can also be a simple one-off with run() and schedule=; the runner still supports that.)
 """
+
 from __future__ import annotations
 
 import importlib
@@ -36,13 +37,26 @@ if TYPE_CHECKING:
 log = logging.getLogger("task")
 
 
-def job(schedule: Schedule | None = None, *, priority: int = 100, timeout: int | None = None, retry_minutes: int | None = 30,
-        enabled: bool = True) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+def job(
+    schedule: Schedule | None = None,
+    *,
+    priority: int = 100,
+    timeout: int | None = None,
+    retry_minutes: int | None = 30,
+    enabled: bool = True,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Mark a function in a jobs/ file (or a Task method) as a job. See the module docstring."""
+
     def deco(func: Any) -> Any:
-        func._job = {"schedule": schedule, "priority": priority, "timeout": timeout,
-                     "retry_minutes": retry_minutes, "enabled": enabled}
+        func._job = {
+            "schedule": schedule,
+            "priority": priority,
+            "timeout": timeout,
+            "retry_minutes": retry_minutes,
+            "enabled": enabled,
+        }
         return func
+
     return deco
 
 
@@ -145,8 +159,9 @@ class Task:
                 if name in funcs:
                     raise RuntimeError(f"{cls.__name__}: job '{name}' is defined twice")
                 funcs[name] = fn
-            cls._jobs = sorted((Job(name=n, func=f, **f._job) for n, f in funcs.items()),
-                               key=lambda j: (j.priority, j.name))
+            cls._jobs = sorted(
+                (Job(name=n, func=f, **f._job) for n, f in funcs.items()), key=lambda j: (j.priority, j.name)
+            )
         return cls._jobs
 
     @classmethod
@@ -163,8 +178,9 @@ class Task:
             try:
                 module = importlib.import_module(f"{cls.jobs_package}.{mod.name}")
             except Exception:
-                log.exception("Could not import job file %s/%s.py — skipping it",
-                              cls.jobs_package.replace(".", "/"), mod.name)
+                log.exception(
+                    "Could not import job file %s/%s.py — skipping it", cls.jobs_package.replace(".", "/"), mod.name
+                )
                 continue
             for name, fn in inspect.getmembers(module, inspect.isfunction):
                 if hasattr(fn, "_job") and fn.__module__ == module.__name__:

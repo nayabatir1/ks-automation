@@ -3,6 +3,7 @@
 Starts on the city screen or world map (bottom menu visible, no pop-up) — game.py's on_open/before_job
 open the game and close all pop-ups first.
 """
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -27,14 +28,14 @@ if TYPE_CHECKING:
     from core.phone import Phone
     from game import Kingshot
 
-IDLE_FULL = timedelta(hours=9)      # "Max Idle Time: 9 hrs"
+IDLE_FULL = timedelta(hours=9)  # "Max Idle Time: 9 hrs"
 
 
 @job()
 def conquest(app: Kingshot, phone: Phone, log: Logger):
     # 1. "Conquest" at the bottom-left of the bottom menu (Q3); its red dot may come and go, so match the text
     app.tap_on_main(phone, log, text="Conquest", region=NAV_Q3)
-    phone.wait_for(text="Conquer", region=CONQUER_BUTTON, timeout=10)   # conquest screen: big "Conquer" button
+    phone.wait_for(text="Conquer", region=CONQUER_BUTTON, timeout=10)  # conquest screen: big "Conquer" button
     log.info("conquest screen open")
 
     # 2. the chest's "Claim" button (right side, above the stage track) -> "Idle Income" box.
@@ -53,7 +54,7 @@ def conquest(app: Kingshot, phone: Phone, log: Logger):
             return known
         log.info("nothing to claim yet; checking again in %s", IDLE_FULL)
         return IDLE_FULL
-    phone.wait_for(text="Idle Time", region=IDLE_BOX_TOP, timeout=10)    # "Idle Time 09:00:00 (Max)"
+    phone.wait_for(text="Idle Time", region=IDLE_BOX_TOP, timeout=10)  # "Idle Time 09:00:00 (Max)"
     log.info("idle income box open")
 
     # 3. the box's big green "Claim"

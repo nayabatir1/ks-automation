@@ -6,9 +6,10 @@
 Jobs are keyed "task.job" and carry next_at — when they can run next. Keyed by name (not by
 time) so each job has exactly one entry; "what's next" is just these sorted by next_at.
 """
+
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -16,7 +17,7 @@ def _parse(ts: str | None) -> datetime | None:
     if not ts:
         return None
     dt = datetime.fromisoformat(ts)
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
 class State:
@@ -33,17 +34,24 @@ class State:
     def next_at(self, name: str) -> datetime | None:
         return _parse(self.data.get(name, {}).get("next_at"))
 
-    def record(self, name: str, started: datetime, status: str, error: str | None = None, seconds: float | None = None,
-               next_at: datetime | None = None):
+    def record(
+        self,
+        name: str,
+        started: datetime,
+        status: str,
+        error: str | None = None,
+        seconds: float | None = None,
+        next_at: datetime | None = None,
+    ):
         entry = {
-            "last_run": started.astimezone(timezone.utc).isoformat(timespec="seconds"),
+            "last_run": started.astimezone(UTC).isoformat(timespec="seconds"),
             "status": status,
             "error": error,
             "duration_s": round(seconds, 1) if seconds is not None else None,
         }
         if next_at is not None:
-            entry["next_at"] = next_at.astimezone(timezone.utc).isoformat(timespec="seconds")
-        try:                       # re-read first: other jobs' entries may have changed (a hand edit, another run)
+            entry["next_at"] = next_at.astimezone(UTC).isoformat(timespec="seconds")
+        try:  # re-read first: other jobs' entries may have changed (a hand edit, another run)
             self.data = json.loads(self.path.read_text())
         except (FileNotFoundError, json.JSONDecodeError):
             pass

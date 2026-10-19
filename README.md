@@ -138,13 +138,14 @@ from core.schedule import At
 from core.task import job
 from regions import NAV_Q4, SCREEN_TITLE
 
+
 @job(schedule=At("00:05", "12:00", tz="UTC"), priority=110, timeout=600, enabled=True)
 def my_job(app, phone, log):
-    app.tap_on_main(phone, log, text="Alliance", region=NAV_Q4)       # first tap of a job (handles pop-ups)
+    app.tap_on_main(phone, log, text="Alliance", region=NAV_Q4)  # first tap of a job (handles pop-ups)
     phone.wait_for(text="Alliance", region=SCREEN_TITLE, timeout=10)  # check the screen changed
     phone.tap(text="Claim All", region=(0, 0.88, 1, 0.98))
     log.info("claimed")
-    return None          # next run: None = next schedule slot, timedelta(...) = that long from now, datetime = then
+    return None  # next run: None = next schedule slot, timedelta(...) = that long from now, datetime = then
 ```
 
 - `@job(...)` options: `schedule=` (At / Every / Cron; leave out if the job returns its own next time),
@@ -197,9 +198,13 @@ go to a building), `app.to_main_screen(...)`.
 After any change:
 
 ```bash
+.venv/bin/ruff format .        # formatting (settings in pyproject.toml: 120 columns)
 .venv/bin/ruff check --fix .   # style / lint: must say "All checks passed!"
 .venv/bin/pyright               # types: must say "0 errors, 0 warnings"
 ```
+
+Editors: set the Python formatter to Ruff (VS Code / Cursor: the "Ruff" extension) and turn on format on save. It
+reads `pyproject.toml`, so a save gives the same code as `ruff format`. `.editorconfig` keeps whitespace the same.
 
 then test with `run.py --job <name> --keep-open --no-sleep`. The editor (VS Code + Pylance) shows the same type
 info while you type: hover a call to see what it takes; `phone.` / `vision.` list what exists. Types used everywhere:

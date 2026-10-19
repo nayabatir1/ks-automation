@@ -4,6 +4,7 @@ World map -> compass -> Intel Mission -> meat icon (top right) -> "Get More": ta
 lit (grey = not ready yet), then close everything.
 !! In Get More only that button is tapped: never Use (spends items), Buy & Use (gems), Go (shops), the "+".
 """
+
 from __future__ import annotations
 
 import time
@@ -22,9 +23,9 @@ if TYPE_CHECKING:
     from game import Kingshot
 
 
-@job(schedule=At("00:05", "12:00", tz="UTC"), priority=105)   # 5:35am + 5:30pm IST, after dailies
+@job(schedule=At("00:05", "12:00", tz="UTC"), priority=105)  # 5:35am + 5:30pm IST, after dailies
 def collect_stamina(app: Kingshot, phone: Phone, log: Logger):
-    if phone.exists(text="World", region=NAV_REGION):            # on the town: the button names the world map
+    if phone.exists(text="World", region=NAV_REGION):  # on the town: the button names the world map
         phone.tap(text="World", region=NAV_REGION)
         phone.wait_for(text="Town", region=NAV_REGION, timeout=15)
     open_intel(app, phone, log)
@@ -33,9 +34,9 @@ def collect_stamina(app: Kingshot, phone: Phone, log: Logger):
     if coloured_share(phone.screen(), FEAST_BUTTON) > 0.3:
         phone.tap_xy((FEAST_BUTTON[0] + FEAST_BUTTON[2]) // 2, (FEAST_BUTTON[1] + FEAST_BUTTON[3]) // 2)
         time.sleep(1.5)
-        tap_to_exit(phone, wait=2)                       # a reward pop-up, if one shows
+        tap_to_exit(phone, wait=2)  # a reward pop-up, if one shows
         log.info("gourmet feast claimed")
     else:
         log.info("gourmet feast not ready (button grey)")
-    phone.back()                                         # Get More -> Intel Mission
-    phone.back()                                         # Intel Mission -> world map
+    phone.back()  # Get More -> Intel Mission
+    phone.back()  # Intel Mission -> world map

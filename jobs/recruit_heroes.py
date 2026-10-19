@@ -3,6 +3,7 @@
 Starts on the city screen or world map (bottom menu visible, no pop-up) — game.py's on_open/before_job
 open the game and close all pop-ups first; after_job backs out to where it started.
 """
+
 from __future__ import annotations
 
 import re
@@ -31,8 +32,8 @@ if TYPE_CHECKING:
     from core.vision import Region
     from game import Kingshot
 
-TAP_TO_EXIT = (0.2, 0.84, 0.8, 0.88)     # Rewards screen: "Tap anywhere to exit" (an orange paid Recruit x1 sits above it)
-UNREAD_RETRY = timedelta(minutes=30)     # a timer that didn't read: look again this soon, so its free recruit isn't missed
+TAP_TO_EXIT = (0.2, 0.84, 0.8, 0.88)  # Rewards screen: "Tap anywhere to exit" (an orange paid Recruit x1 sits above it)
+UNREAD_RETRY = timedelta(minutes=30)  # a timer that didn't read: look again this soon, so its free recruit isn't missed
 
 
 @job()
@@ -49,12 +50,14 @@ def recruit_heroes(app: Kingshot, phone: Phone, log: Logger):
 
     # 3. Advanced and Epic: tap the green "Recruit x1 / Free" if it's there, then read "Next free: ..." above it.
     #    !! Every other recruit button is orange and costs keys: never tapped.
-    waits = [recruit_free(phone, log, "advanced", ADVANCED_X1, ADVANCED_TIMER),
-             recruit_free(phone, log, "epic", EPIC_X1, EPIC_TIMER)]
+    waits = [
+        recruit_free(phone, log, "advanced", ADVANCED_X1, ADVANCED_TIMER),
+        recruit_free(phone, log, "epic", EPIC_X1, EPIC_TIMER),
+    ]
     read = [w for w in waits if w is not None]
     if not read:
         raise RuntimeError("could not read either 'Next free' timer")
-    if len(read) < len(waits):                      # one timer unread: its free recruit may come before the other's
+    if len(read) < len(waits):  # one timer unread: its free recruit may come before the other's
         return min(*read, UNREAD_RETRY)
     return min(read) + timedelta(seconds=10)
 
@@ -65,7 +68,7 @@ def recruit_free(phone: Phone, log: Logger, kind: str, button: Region, timer: Re
     if m and 35 <= median_hue(phone.last_screen, button) <= 85:
         phone.tap_xy(*m.center)
         exit_text = phone.wait_for(text="Tap anywhere", region=TAP_TO_EXIT, timeout=15)
-        for _ in range(8):                          # taps during the chest animation are ignored: tap again
+        for _ in range(8):  # taps during the chest animation are ignored: tap again
             phone.tap_xy(*exit_text.center)
             if phone.exists(text="Recruitment", region=RECRUIT_TITLE, timeout=1.5):
                 break

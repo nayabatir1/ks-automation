@@ -1,0 +1,21 @@
+# Tool settings only (this project isn't a package). Editors read these when they format on save, so a save,
+# `ruff format .` and `ruff check --fix .` all give the same code.
+#
+#   .venv/bin/ruff format .          # format everything
+#   .venv/bin/ruff check --fix .     # lint (imports sorted, etc.)
+#
+# Editor: set the Python formatter to Ruff (VS Code / Cursor: the "Ruff" extension, "editor.defaultFormatter":
+# "charliermarsh.ruff"). Black also works: it reads [tool.black] below and formats the same way.
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+extend-exclude = ["tools_map", "temp", "logs"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.black]
+line-length = 120
+target-version = ["py313"]

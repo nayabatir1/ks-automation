@@ -13,7 +13,8 @@ A schedule is a list of *slots* (exact times). A task is due when the latest slo
 is at most `grace_minutes` ago and the task hasn't run since that slot — so a slot
 missed by a reboot still runs, and no slot ever runs twice.
 """
-from datetime import date, datetime, time, timedelta, timezone
+
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import config
@@ -41,8 +42,7 @@ class Schedule:
     def __init__(self, tz: str | None = None, grace_minutes: float | None = None) -> None:
         self.tz_name = tz or config.SCHEDULE_TZ
         self.tz = ZoneInfo(self.tz_name)
-        self.grace = timedelta(minutes=config.DEFAULT_GRACE_MINUTES if grace_minutes is None
-                               else grace_minutes)
+        self.grace = timedelta(minutes=config.DEFAULT_GRACE_MINUTES if grace_minutes is None else grace_minutes)
 
     def _slots_on(self, day: date) -> list[datetime]:
         raise NotImplementedError
@@ -87,8 +87,13 @@ class Schedule:
 
 
 class At(Schedule):
-    def __init__(self, *times: str, days: str | list[str | int] | None = None, tz: str | None = None,
-                 grace_minutes: float | None = None) -> None:
+    def __init__(
+        self,
+        *times: str,
+        days: str | list[str | int] | None = None,
+        tz: str | None = None,
+        grace_minutes: float | None = None,
+    ) -> None:
         super().__init__(tz, grace_minutes)
         if not times:
             raise ValueError("At() needs at least one 'HH:MM'")
@@ -110,8 +115,15 @@ class At(Schedule):
 class Every(Schedule):
     """Slots start at the window start (or midnight) and repeat every interval until the window end."""
 
-    def __init__(self, minutes: float = 0, hours: float = 0, days: str | list[str | int] | None = None,
-                 between: tuple[str, str] | None = None, tz: str | None = None, grace_minutes: float | None = None) -> None:
+    def __init__(
+        self,
+        minutes: float = 0,
+        hours: float = 0,
+        days: str | list[str | int] | None = None,
+        between: tuple[str, str] | None = None,
+        tz: str | None = None,
+        grace_minutes: float | None = None,
+    ) -> None:
         super().__init__(tz, grace_minutes)
         self.interval = timedelta(minutes=minutes, hours=hours)
         if self.interval <= timedelta(0):
@@ -126,7 +138,7 @@ class Every(Schedule):
             start, end = self.between
             first = self._local(day, start)
             last = self._local(day, end)
-            if end < start:                       # window crosses midnight, e.g. 22:00-02:00
+            if end < start:  # window crosses midnight, e.g. 22:00-02:00
                 last += timedelta(days=1)
         else:
             first = self._local(day, time(0, 0))
@@ -166,7 +178,7 @@ class Cron(Schedule):
         self.dom = self._field(fields[2], 1, 31)
         self.months = self._field(fields[3], 1, 12, MONTH_NAMES, 1)
         dow = self._field(fields[4], 0, 7, ["sun", "mon", "tue", "wed", "thu", "fri", "sat"], 0)
-        self.dow = {d % 7 for d in dow}                    # cron numbering: 0 = Sunday
+        self.dow = {d % 7 for d in dow}  # cron numbering: 0 = Sunday
         self.dom_any = fields[2] == "*"
         self.dow_any = fields[4] == "*"
         self.times = sorted(time(h, m) for h in self.hours for m in self.minutes)
@@ -199,7 +211,7 @@ class Cron(Schedule):
         if day.month not in self.months:
             return False
         dom_ok = day.day in self.dom
-        dow_ok = (day.weekday() + 1) % 7 in self.dow       # python Mon=0 -> cron Mon=1
+        dow_ok = (day.weekday() + 1) % 7 in self.dow  # python Mon=0 -> cron Mon=1
         if self.dom_any and self.dow_any:
             return True
         if self.dom_any:
@@ -218,4 +230,4 @@ class Cron(Schedule):
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)

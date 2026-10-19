@@ -17,6 +17,7 @@ Usage:
     ... --no-sleep                  leave the screen on afterwards (debugging)
     ... --keep-open                 leave the app open afterwards (building jobs step by step)
 """
+
 import argparse
 import fcntl
 import logging
@@ -24,7 +25,7 @@ import signal
 import sys
 import time
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
@@ -49,7 +50,7 @@ class TaskTimeout(BaseException):  # BaseException so a task's own `except Excep
 def setup_logging(verbose: bool) -> None:
     config.LOG_DIR.mkdir(exist_ok=True)
     fmt = logging.Formatter("%(asctime)sZ %(levelname)-7s %(name)s: %(message)s", "%Y-%m-%d %H:%M:%S")
-    fmt.converter = time.gmtime   # log times in UTC, like state.json
+    fmt.converter = time.gmtime  # log times in UTC, like state.json
     file_h = RotatingFileHandler(config.LOG_DIR / "runner.log", maxBytes=2_000_000, backupCount=5)
     file_h.setFormatter(fmt)
     console = logging.StreamHandler()
@@ -75,10 +76,11 @@ def acquire_lock():
 def save_failure(phone: Phone, name: str) -> None:
     """Screenshot + all OCR text with coordinates, so you can debug from the terminal. Old ones are pruned."""
     config.FAILURE_DIR.mkdir(parents=True, exist_ok=True)
-    base = f"{config.FAILURE_DIR}/{name}_{utcnow():%Y%m%d-%H%M%S}"   # not with_suffix: names contain dots
+    base = f"{config.FAILURE_DIR}/{name}_{utcnow():%Y%m%d-%H%M%S}"  # not with_suffix: names contain dots
     try:
-        img = phone.screen()            # what the screen shows *now*
+        img = phone.screen()  # what the screen shows *now*
         import cv2
+
         cv2.imwrite(f"{base}.jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
         phone.save_ocr(Path(f"{base}.txt"), img)
         log.info("Saved %s.jpg and %s.txt (OCR text with tap coordinates)", base, base)
@@ -90,7 +92,7 @@ def save_failure(phone: Phone, name: str) -> None:
 def prune_failures():
     """Delete failure snapshots older than FAILURE_KEEP_DAYS, and all but the newest FAILURE_KEEP_MAX."""
     files = sorted(config.FAILURE_DIR.glob("*"), key=lambda f: f.stat().st_mtime, reverse=True)
-    snapshots = {}                              # snapshot name -> its files (.jpg/.png + .txt)
+    snapshots = {}  # snapshot name -> its files (.jpg/.png + .txt)
     for f in files:
         snapshots.setdefault(f.stem, []).append(f)
     cutoff = time.time() - config.FAILURE_KEEP_DAYS * 86400
@@ -108,10 +110,12 @@ def check_session_taken(phone: Phone, task: Task, name: str) -> bool:
     except Exception:  # noqa: BLE001 — this check must never turn into a failure of its own
         taken = False
     if taken:
-        until = pause.pause_for(timedelta(minutes=config.SESSION_TAKEN_PAUSE_MINUTES),
-                                "account logged in on another device")
-        log.warning("=== %s: the account is in use on another device; not reconnecting, paused until %s",
-                    name, _fmt_both(until))
+        until = pause.pause_for(
+            timedelta(minutes=config.SESSION_TAKEN_PAUSE_MINUTES), "account logged in on another device"
+        )
+        log.warning(
+            "=== %s: the account is in use on another device; not reconnecting, paused until %s", name, _fmt_both(until)
+        )
     return taken
 
 
@@ -152,7 +156,7 @@ def call_with_timeout(seconds: int, fn: Callable[[], Any], label: str) -> tuple[
         log.exception("=== %s: FAILED", label)
         return "error", f"{type(e).__name__}: {e}", None
     finally:
-        signal.alarm(0)   # before any cleanup, so the alarm can't fire inside it
+        signal.alarm(0)  # before any cleanup, so the alarm can't fire inside it
 
 
 def close_app(phone: Phone, task: Task) -> None:
@@ -172,7 +176,7 @@ def open_app(phone: Phone, task: Task, tlog: logging.Logger) -> None:
         log.info("%s is already open; using it as it is", task.package)
     elif task.package:
         phone.launch(task.package, task.activity)
-    phone.start_input()          # get fast taps ready while the app loads
+    phone.start_input()  # get fast taps ready while the app loads
     task.on_open(phone, tlog)
 
 
@@ -185,9 +189,11 @@ def run_simple(phone: Phone, name: str, task: Task, state: State) -> bool:
 
     status, error, _ = call_with_timeout(task.open_timeout, lambda: open_app(phone, task, tlog), f"{name}.open")
     if status == "ok":
+
         def work():
             task.before_job(phone, tlog)
             task.run(phone, tlog)
+
         status, error, _ = call_with_timeout(timeout, work, name)
     try:
         if status != "ok":
@@ -209,13 +215,15 @@ def first_run(j: Job, now: datetime) -> datetime:
         slot = j.schedule.next_slot(now)
         if slot:
             return slot
-    return datetime.min.replace(tzinfo=timezone.utc)
+    return datetime.min.replace(tzinfo=UTC)
 
 
 def due_jobs(name: str, task: Task, state: State, now: datetime, ahead: timedelta = timedelta(0)) -> list[Job]:
     """Enabled jobs whose next_at has come, in run order. Never run = due now, or at its first scheduled slot."""
+
     def when(j: Job) -> datetime:
         return state.next_at(f"{name}.{j.name}") or first_run(j, now)
+
     out = [j for j in task.job_list() if j.enabled and when(j) <= now + ahead]
     return sorted(out, key=lambda j: (j.priority, when(j)))
 
@@ -225,7 +233,7 @@ def retry_at(job: Job) -> datetime:
     a job with fixed times (the only time a job runs outside its schedule). Its schedule never moves: a retry is
     never later than the next slot, and after a run that went well the next run is the next slot again."""
     slot = job.schedule.next_slot(utcnow()) if job.schedule else None
-    if job.retry_minutes is None and slot:                  # a job that doesn't retry: its next slot
+    if job.retry_minutes is None and slot:  # a job that doesn't retry: its next slot
         return slot
     retry = utcnow() + timedelta(minutes=job.retry_minutes or 30)
     return min(retry, slot) if slot else retry
@@ -243,13 +251,14 @@ def next_time(job: Job, result: object) -> datetime:
     slot = job.schedule.next_slot(now) if job.schedule else None
     if slot:
         return slot
-    log.warning("job %s returned no next time and has no schedule; retrying in %s min",
-                job.name, job.retry_minutes or 30)
+    log.warning(
+        "job %s returned no next time and has no schedule; retrying in %s min", job.name, job.retry_minutes or 30
+    )
     return now + timedelta(minutes=job.retry_minutes or 30)
 
 
 HAND_PAUSE = "paused by hand"
-_hand_run = False           # a --job run while paused by hand: the pause doesn't stop it (it still stops timer runs)
+_hand_run = False  # a --job run while paused by hand: the pause doesn't stop it (it still stops timer runs)
 
 
 def run_jobs(phone: Phone, name: str, task: Task, state: State, jobs: list[Job], wait: bool = True) -> bool:
@@ -261,7 +270,7 @@ def run_jobs(phone: Phone, name: str, task: Task, state: State, jobs: list[Job],
     if status != "ok":
         if check_session_taken(phone, task, name):
             close_app(phone, task)
-            return True                     # not an error: jobs stay due and run after the pause
+            return True  # not an error: jobs stay due and run after the pause
         # can't even open the app: push every job back by its retry time (no hammering every minute)
         try:
             save_failure(phone, name)
@@ -285,8 +294,9 @@ def run_jobs(phone: Phone, name: str, task: Task, state: State, jobs: list[Job],
     return ok
 
 
-def run_batch(phone: Phone, name: str, task: Task, state: State, jobs: list[Job],
-              tlog: logging.Logger) -> tuple[bool, bool]:
+def run_batch(
+    phone: Phone, name: str, task: Task, state: State, jobs: list[Job], tlog: logging.Logger
+) -> tuple[bool, bool]:
     """Run these jobs one after another. Returns (all ok, app could not be recovered)."""
     ok = True
     for i, j in enumerate(jobs):
@@ -307,10 +317,11 @@ def run_batch(phone: Phone, name: str, task: Task, state: State, jobs: list[Job]
             result = j.func(task, phone, jlog)
             task.after_job(phone, jlog)
             return next_time(j, result)
+
         status, error, nxt = call_with_timeout(timeout, work, key)
         secs = time.monotonic() - t0
         if status != "ok" and check_session_taken(phone, task, name):
-            return ok, True                 # job state untouched: it runs again after the pause
+            return ok, True  # job state untouched: it runs again after the pause
         if status != "ok":
             ok = False
             nxt = retry_at(j)
@@ -319,8 +330,7 @@ def run_batch(phone: Phone, name: str, task: Task, state: State, jobs: list[Job]
         log.info("--- %s: %s in %.1fs, next %s", key, status, secs, _fmt_both(nxt))
 
         if status != "ok" and i < len(jobs) - 1:
-            r_status, _, _ = call_with_timeout(task.open_timeout,
-                                               lambda: task.recover(phone, tlog), f"{name}.recover")
+            r_status, _, _ = call_with_timeout(task.open_timeout, lambda: task.recover(phone, tlog), f"{name}.recover")
             if r_status != "ok":
                 log.error("=== %s: could not recover the app; remaining jobs wait for the next run", name)
                 return False, True
@@ -339,8 +349,7 @@ def wait_for_next_jobs(name: str, task: Task, state: State, session_end: float) 
         log.info("=== %s: session has run %d min; the rest waits for the next run", name, task.max_session_minutes)
         return []
     if wait_s > 0:
-        log.info("=== %s: %s due in %.0fs; keeping the app open", name,
-                 ", ".join(j.name for j in soon), wait_s)
+        log.info("=== %s: %s due in %.0fs; keeping the app open", name, ", ".join(j.name for j in soon), wait_s)
         time.sleep(wait_s)
     return due_jobs(name, task, state, utcnow()) or soon
 
@@ -359,13 +368,14 @@ def _fmt(dt: datetime | None, tz: ZoneInfo | timezone) -> str:
 
 
 def _fmt_both(dt: datetime | None) -> str:
-    return f"{_fmt(dt, IST)} IST / {_fmt(dt, timezone.utc)} UTC" if dt else "-"
+    return f"{_fmt(dt, IST)} IST / {_fmt(dt, UTC)} UTC" if dt else "-"
 
 
-def _row(label: str, on: str, pri: int, sched: str, nxt: datetime | None, last: datetime | None,
-         status: str) -> None:
-    print(f"{label:30} {on:3} {pri:>3}  {sched:30} {_fmt(nxt, IST):11}  {_fmt(nxt, timezone.utc):11}  "
-          f"{_fmt(last, timezone.utc):11}  {status}")
+def _row(label: str, on: str, pri: int, sched: str, nxt: datetime | None, last: datetime | None, status: str) -> None:
+    print(
+        f"{label:30} {on:3} {pri:>3}  {sched:30} {_fmt(nxt, IST):11}  {_fmt(nxt, UTC):11}  "
+        f"{_fmt(last, UTC):11}  {status}"
+    )
 
 
 def _status(entry: dict[str, Any] | None) -> str:
@@ -381,15 +391,24 @@ def job_next(name: str, j: Job, state: State, now: datetime) -> datetime | None:
 
 
 def print_list(tasks: dict[str, Task], state: State, now: datetime) -> None:
-    print(f"{'TASK / .job':30} {'ON':3} {'PRI':>3}  {'SCHEDULE':30} {'NEXT IST':11}  {'NEXT UTC':11}  "
-          f"{'LAST RUN UTC':11}  STATUS")
+    print(
+        f"{'TASK / .job':30} {'ON':3} {'PRI':>3}  {'SCHEDULE':30} {'NEXT IST':11}  {'NEXT UTC':11}  "
+        f"{'LAST RUN UTC':11}  STATUS"
+    )
     for name, t in tasks.items():
         on = "yes" if t.enabled else "no"
         jobs = t.job_list()
         if not jobs:
             nxt = t.schedule.next_slot(now) if (t.schedule and t.enabled) else None
-            _row(name, on, t.priority, str(t.schedule or "manual only"), nxt,
-                 state.last_run(name), _status(state.data.get(name, {})))
+            _row(
+                name,
+                on,
+                t.priority,
+                str(t.schedule or "manual only"),
+                nxt,
+                state.last_run(name),
+                _status(state.data.get(name, {})),
+            )
             continue
         _row(name, on, t.priority, f"{len(jobs)} jobs", None, None, "")
         for j in jobs:
@@ -397,8 +416,7 @@ def print_list(tasks: dict[str, Task], state: State, now: datetime) -> None:
             j_on = "yes" if (t.enabled and j.enabled) else "no"
             sched = str(j.schedule) if j.schedule else "when job says"
             nxt = job_next(name, j, state, now) if j_on == "yes" else None
-            _row(f"  .{j.name}", j_on, j.priority, sched, nxt, state.last_run(key),
-                 _status(state.data.get(key, {})))
+            _row(f"  .{j.name}", j_on, j.priority, sched, nxt, state.last_run(key), _status(state.data.get(key, {})))
     print(f"\nnow: {_fmt_both(now)}")
 
 
@@ -417,7 +435,7 @@ def print_timeline(tasks: dict[str, Task], state: State, now: datetime) -> None:
     for when, what in items:
         mins = max(0, int((when - now).total_seconds() // 60))
         left = "due" if when <= now else (f"{mins // 60}h{mins % 60:02d}m" if mins >= 60 else f"{mins}m")
-        print(f"{_fmt(when, IST):11}  {_fmt(when, timezone.utc):11}  {left:>8}  {what}")
+        print(f"{_fmt(when, IST):11}  {_fmt(when, UTC):11}  {left:>8}  {what}")
     if not items:
         print("(nothing enabled)")
 
@@ -428,8 +446,10 @@ def set_pause(args: argparse.Namespace) -> int:
         log.info("Resumed" if pause.resume() else "Was not paused")
         return 0
     from core.timeparse import parse_duration
-    duration = parse_duration(args.pause, two_part="hm") if args.pause else \
-        timedelta(minutes=config.DEFAULT_PAUSE_MINUTES)
+
+    duration = (
+        parse_duration(args.pause, two_part="hm") if args.pause else timedelta(minutes=config.DEFAULT_PAUSE_MINUTES)
+    )
     if not duration:
         log.error("Can't read duration %r; use e.g. 2h, 90m, 1h30m", args.pause)
         return 2
@@ -448,8 +468,13 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="show what is due, don't run")
     ap.add_argument("--no-sleep", action="store_true", help="leave the screen on afterwards")
     ap.add_argument("--keep-open", action="store_true", help="don't close the app afterwards (building jobs)")
-    ap.add_argument("--pause", nargs="?", const="", metavar="DURATION",
-                    help=f"start no sessions for DURATION (e.g. 2h, 90m; default {config.DEFAULT_PAUSE_MINUTES}m)")
+    ap.add_argument(
+        "--pause",
+        nargs="?",
+        const="",
+        metavar="DURATION",
+        help=f"start no sessions for DURATION (e.g. 2h, 90m; default {config.DEFAULT_PAUSE_MINUTES}m)",
+    )
     ap.add_argument("--resume", action="store_true", help="end a pause now")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
@@ -481,19 +506,23 @@ def main():
         _hand_run = True
     elif paused:
         if args.task or args.job:
-            log.error("Paused until %s (%s). Run `run.py --resume` first.", _fmt_both(paused["until"]),
-                      paused["reason"])
+            log.error(
+                "Paused until %s (%s). Run `run.py --resume` first.", _fmt_both(paused["until"]), paused["reason"]
+            )
             return 1
-        return 0                            # timer runs: nothing while paused
+        return 0  # timer runs: nothing while paused
     if not args.dry_run and not phone_connected(manual=bool(args.task or args.job)):
-        return 1 if (args.task or args.job) else 0   # timer runs: quietly try again next minute
+        return 1 if (args.task or args.job) else 0  # timer runs: quietly try again next minute
 
     forced_jobs = None
-    if args.job and not args.task:   # --job alone: find the task that has it (there's only Kingshot)
+    if args.job and not args.task:  # --job alone: find the task that has it (there's only Kingshot)
         owners = [n for n, t in tasks.items() if any(j.name == args.job for j in t.job_list())]
         if not owners:
-            log.error("No job named '%s'. Jobs: %s", args.job,
-                      ", ".join(j.name for t in tasks.values() for j in t.job_list()) or "none")
+            log.error(
+                "No job named '%s'. Jobs: %s",
+                args.job,
+                ", ".join(j.name for t in tasks.values() for j in t.job_list()) or "none",
+            )
             return 2
         args.task = owners[0]
     if args.task:
@@ -504,8 +533,12 @@ def main():
         if args.job:
             names = [j.name for j in t.job_list()]
             if args.job not in names:
-                log.error("Task '%s' has no job '%s'. Its jobs: %s", args.task, args.job,
-                          ", ".join(names) or "none (simple task)")
+                log.error(
+                    "Task '%s' has no job '%s'. Its jobs: %s",
+                    args.task,
+                    args.job,
+                    ", ".join(names) or "none (simple task)",
+                )
                 return 2
         if t.job_list():
             forced_jobs = [j for j in t.job_list() if (j.name == args.job if args.job else True)]

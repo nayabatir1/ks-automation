@@ -5,6 +5,7 @@ check "Lv.8" and the "Only search for full Resources" tick -> Search -> Gather -
 "Other Troops are marching toward the same target" -> Cancel, search again. Troops aren't waited for.
 Starts on the city screen or world map; after_job backs out to where it started.
 """
+
 from __future__ import annotations
 
 import re
@@ -41,19 +42,24 @@ if TYPE_CHECKING:
     from game import Kingshot
 
 RESOURCES = ("Bread", "Wood", "Stone", "Iron")
-LEVEL = 8                                       # 8 is the slider's top, so "Lv.8" always shows in one spot
-FIELD_OK = (942, 2125)                          # OK of the text field the number box opens
-SEARCH_PANEL_GO = (0.2, 0.9, 0.8, 0.99)          # the search panel's "Search" button (the panel is open)
+LEVEL = 8  # 8 is the slider's top, so "Lv.8" always shows in one spot
+FIELD_OK = (942, 2125)  # OK of the text field the number box opens
+SEARCH_PANEL_GO = (0.2, 0.9, 0.8, 0.99)  # the search panel's "Search" button (the panel is open)
 DEPLOY_TAP = (822, 2240)
 
 
-@job(timeout=600)   # every 7.5 h (the job returns it); a few re-searches fit in 10 min
+@job(timeout=600)  # every 7.5 h (the job returns it); a few re-searches fit in 10 min
 def farming(app: Kingshot, phone: Phone, log: Logger):
-    if phone.exists(text="World", region=NAV_REGION):            # on the town: the button names the world map
+    if phone.exists(text="World", region=NAV_REGION):  # on the town: the button names the world map
         phone.tap(text="World", region=NAV_REGION)
         phone.wait_for(text="Town", region=NAV_REGION, timeout=15)
-    app.tap_on_main(phone, log, image="search_button", region=SEARCH_BUTTON,
-                    then={"text": "Search", "region": (0.2, 0.9, 0.8, 0.99)})
+    app.tap_on_main(
+        phone,
+        log,
+        image="search_button",
+        region=SEARCH_BUTTON,
+        then={"text": "Search", "region": (0.2, 0.9, 0.8, 0.99)},
+    )
     phone.wait_for(text="Search", region=(0.2, 0.9, 0.8, 0.99), timeout=10)
     log.info("search panel open")
     for kind in RESOURCES:
@@ -69,13 +75,13 @@ def gather(phone: Phone, log: Logger, kind: str, tries: int = 3) -> None:
             phone.wait_for(text="Search", region=SEARCH_PANEL_GO, timeout=10)
         m = phone.find(text=kind, region=SEARCH_ROW)
         if not m:
-            swipe_row_to_end(phone)                      # Bread / Wood / Stone / Iron are at the row's right end
+            swipe_row_to_end(phone)  # Bread / Wood / Stone / Iron are at the row's right end
             m = phone.find(text=kind, region=SEARCH_ROW)
         if not m:
             raise ElementNotFound(f"{kind} isn't in the search row")
-        phone.tap_xy(m.center[0], m.center[1] - 60)      # the tile picture above its name
+        phone.tap_xy(m.center[0], m.center[1] - 60)  # the tile picture above its name
         time.sleep(1.2)
-        set_level(phone, LEVEL)                          # each resource keeps its own level: always set it
+        set_level(phone, LEVEL)  # each resource keeps its own level: always set it
         phone.forget_screen()
         level = level_label(phone.screen())
         if level != LEVEL:
@@ -84,8 +90,8 @@ def gather(phone: Phone, log: Logger, kind: str, tries: int = 3) -> None:
             raise RuntimeError(f"{kind}: 'Only search for full Resources' isn't ticked; not searching")
         phone.tap_xy(*SEARCH_GO)
         phone.tap(text="Gather", region=TILE_GATHER, timeout=10)
-        phone.wait_for(text=kind, region=SCREEN_TITLE, timeout=10)   # formation page, titled by the resource
-        for hero in (3, 2):                              # right to left, so the cards can't shift under the taps
+        phone.wait_for(text=kind, region=SCREEN_TITLE, timeout=10)  # formation page, titled by the resource
+        for hero in (3, 2):  # right to left, so the cards can't shift under the taps
             phone.tap_xy(*HERO_MINUS[hero])
             time.sleep(1)
         hue = vision.median_hue(phone.screen(DEPLOY_BUTTON), DEPLOY_BUTTON)
@@ -95,11 +101,11 @@ def gather(phone: Phone, log: Logger, kind: str, tries: int = 3) -> None:
         time.sleep(2)
         phone.forget_screen()
         cancel = phone.find(text="Cancel", region=SAME_TARGET_CANCEL)
-        if cancel:                                       # someone already marches there: another tile
+        if cancel:  # someone already marches there: another tile
             log.info("%s: tile already targeted; searching again", kind)
             phone.tap_xy(*cancel.center)
             time.sleep(1.5)
-            phone.back()                                 # formation page -> world map
+            phone.back()  # formation page -> world map
             time.sleep(1.5)
             continue
         log.info("%s: deployed (attempt %d)", kind, attempt + 1)

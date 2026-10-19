@@ -1,4 +1,5 @@
 """Global settings. Edit these, or override with environment variables (see .env.example)."""
+
 import os
 from pathlib import Path
 
@@ -41,21 +42,21 @@ SLEEP_AFTER_RUN = True
 DISABLE_KEYBOARDS = True
 
 # --- screen reading -----------------------------------------------------------
-OCR_LANG = "eng"          # tesseract language(s), e.g. "eng+hin" (needs tesseract-ocr-hin)
-OCR_MIN_CONF = 40         # ignore OCR words below this confidence (0-100)
-MATCH_THRESHOLD = 0.85    # template-match score needed to count as found (0-1)
-POLL_INTERVAL = 0.3       # seconds between screenshots while waiting for something
-MONKEY_PORT = 1080        # local port for fast input (Android's built-in `monkey --port`)
+OCR_LANG = "eng"  # tesseract language(s), e.g. "eng+hin" (needs tesseract-ocr-hin)
+OCR_MIN_CONF = 40  # ignore OCR words below this confidence (0-100)
+MATCH_THRESHOLD = 0.85  # template-match score needed to count as found (0-1)
+POLL_INTERVAL = 0.3  # seconds between screenshots while waiting for something
+MONKEY_PORT = 1080  # local port for fast input (Android's built-in `monkey --port`)
 
 LOG_DIR = BASE_DIR / "logs"
-FAILURE_DIR = LOG_DIR / "failures"   # screenshot + OCR text saved here when a job fails
-FAILURE_KEEP_DAYS = 7                # failure snapshots older than this are deleted
-FAILURE_KEEP_MAX = 20                # ...and only the newest this many are kept
+FAILURE_DIR = LOG_DIR / "failures"  # screenshot + OCR text saved here when a job fails
+FAILURE_KEEP_DAYS = 7  # failure snapshots older than this are deleted
+FAILURE_KEEP_MAX = 20  # ...and only the newest this many are kept
 TEMPLATE_DIR = BASE_DIR / "templates"  # icon/button images for image= (make them with tools.py crop)
-STATE_FILE = BASE_DIR / "state.json"   # last-run times per task
+STATE_FILE = BASE_DIR / "state.json"  # last-run times per task
 LOCK_FILE = BASE_DIR / ".runner.lock"
-SCROLL_MEMORY_FILE = BASE_DIR / "scroll_memory.json"   # how many swipes each scroll_to needed last time
-PAUSE_FILE = BASE_DIR / "pause.json"   # while it exists (and hasn't expired) no sessions start
+SCROLL_MEMORY_FILE = BASE_DIR / "scroll_memory.json"  # how many swipes each scroll_to needed last time
+PAUSE_FILE = BASE_DIR / "pause.json"  # while it exists (and hasn't expired) no sessions start
 
 # Pause lengths: `run.py --pause` without a duration, and after the game says the account
 # was logged in on another device (you're playing on your own phone).

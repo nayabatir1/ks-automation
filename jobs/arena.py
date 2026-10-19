@@ -4,6 +4,7 @@ Test one part: run.py --job arena --part pan_extra_intel_mission
 Starts on the city screen or world map (bottom menu visible, no pop-up) — game.py's on_open/before_job
 open the game and close all pop-ups first; after_job backs out to where it started.
 """
+
 from __future__ import annotations
 
 import re
@@ -45,11 +46,11 @@ def arena(app: Kingshot, phone: Phone, log: Logger):
 def pan_extra_intel_mission(app: Kingshot, phone: Phone, log: Logger):
     """World map -> compass button (Q4, right) -> Intel Mission: tap the hero portrait (top left) when it's there,
     which brings new missions. Then close Intel Mission and go to the town view."""
-    if phone.exists(text="World", region=NAV_REGION):            # on the town: the button names the world map
+    if phone.exists(text="World", region=NAV_REGION):  # on the town: the button names the world map
         phone.tap(text="World", region=NAV_REGION)
         phone.wait_for(text="Town", region=NAV_REGION, timeout=15)
     app.tap_on_main(phone, log, image="compass_button", region=COMPASS_BUTTON)
-    phone.wait_for(text="Refreshes In", region=INTEL_REFRESH, timeout=20)   # the mission map takes a while to load
+    phone.wait_for(text="Refreshes In", region=INTEL_REFRESH, timeout=20)  # the mission map takes a while to load
     log.info("intel mission open")
     if phone.exists(image="intel_hero", region=INTEL_HERO):
         phone.tap(image="intel_hero", region=INTEL_HERO)
@@ -60,7 +61,7 @@ def pan_extra_intel_mission(app: Kingshot, phone: Phone, log: Logger):
     phone.back()
     phone.wait_for(text="Town", region=NAV_REGION, timeout=10)
     phone.tap(text="Town", region=NAV_REGION)
-    phone.wait_for(text="World", region=NAV_REGION, timeout=15)   # the town is shown where it was left
+    phone.wait_for(text="World", region=NAV_REGION, timeout=15)  # the town is shown where it was left
 
 
 def fight_arena(app: Kingshot, phone: Phone, log: Logger):
@@ -100,7 +101,7 @@ def fight_arena(app: Kingshot, phone: Phone, log: Logger):
 def attack_all(phone: Phone, log: Logger) -> None:
     """Fight until the daily attempts are used (see step 5 in arena())."""
     refreshes = 0
-    attacked: dict[tuple[int | None, int], int] = {}    # player (power, row y) -> times attacked this run
+    attacked: dict[tuple[int | None, int], int] = {}  # player (power, row y) -> times attacked this run
     for _ in range(MAX_FIGHTS):
         open_challenge_list(phone)
         left = attempts_left(phone)
@@ -109,48 +110,60 @@ def attack_all(phone: Phone, log: Logger) -> None:
             log.info("no attempts left; done for today")
             return
         rows = opponents(phone)
-        log.info("opponents: %s", ", ".join(f"{'green' if g else 'red'} {p:,}" if p else f"{'green' if g else 'red'} ?"
-                                            for _, g, p in rows))
+        log.info(
+            "opponents: %s",
+            ", ".join(f"{'green' if g else 'red'} {p:,}" if p else f"{'green' if g else 'red'} ?" for _, g, p in rows),
+        )
         fresh_green = pick_opponent(rows, attacked, green=True, fresh=True)
         if fresh_green is None and refreshes < MAX_REFRESHES and free_refresh(phone, log):
             refreshes += 1
-            attacked.clear()                             # a new list: new players
+            attacked.clear()  # a new list: new players
             continue
-        pick = (fresh_green or pick_opponent(rows, attacked, green=False, fresh=True)
-                or pick_opponent(rows, attacked))
+        pick = fresh_green or pick_opponent(rows, attacked, green=False, fresh=True) or pick_opponent(rows, attacked)
         if pick is None:
             log.info("no opponent found; done for now")
             return
         y, green, power = pick
         times = attacked.get((power, y), 0)
-        log.info("attacking %s %s%s", "green" if green else "red", f"{power:,}" if power else "?",
-                 f" (again: attacked {times}x already)" if times else "")
+        log.info(
+            "attacking %s %s%s",
+            "green" if green else "red",
+            f"{power:,}" if power else "?",
+            f" (again: attacked {times}x already)" if times else "",
+        )
         attacked[(power, y)] = times + 1
         fight(phone, log, y)
     log.info("stopped after %d fights (safety limit)", MAX_FIGHTS)
 
 
-def pick_opponent(rows: list[tuple[int, bool, int | None]], attacked: dict[tuple[int | None, int], int],
-                  green: bool | None = None, fresh: bool = False) -> tuple[int, bool, int | None] | None:
+def pick_opponent(
+    rows: list[tuple[int, bool, int | None]],
+    attacked: dict[tuple[int | None, int], int],
+    green: bool | None = None,
+    fresh: bool = False,
+) -> tuple[int, bool, int | None] | None:
     """The row to attack: the lowest power among the rows that match, or None.
     green=True/False: only green/red rows; fresh=True: only players not attacked yet this run.
     With neither: everyone, the least-attacked first, then green before red."""
-    pick = [(attacked.get((p, y), 0), not g, p if p is not None else 10**12, y, g, p) for y, g, p in rows
-            if (green is None or g == green) and not (fresh and (p, y) in attacked)]   # unreadable power: last
+    pick = [
+        (attacked.get((p, y), 0), not g, p if p is not None else 10**12, y, g, p)
+        for y, g, p in rows
+        if (green is None or g == green) and not (fresh and (p, y) in attacked)
+    ]  # unreadable power: last
     if not pick:
         return None
     *_, y, g, p = min(pick)
     return y, g, p
 
 
-MAX_FIGHTS = 10            # safety limit per run (daily attempts are usually 4)
-MAX_REFRESHES = 3          # per run, so a refresh can never loop
-LIST_TITLE = (0.1, 0.2, 0.9, 0.27)         # "Challenge List" box title
-FIGHT_BUTTON = (0.5, 0.9, 0.98, 0.99)      # Squad Settings: green "Fight" (bottom right; "Quick Deploy" is left)
-PAUSE_AREA = (0, 0.7, 0.4, 0.88)           # battle: pause button, bottom left (templates/battle_pause.png)
-RETREAT_AREA = (0.15, 0.53, 0.5, 0.63)     # paused: "Retreat" (left) / "Continue" (right)
-POWER_X = (285, 430)       # the power figure beside the fist icon: green = lower than mine, red = higher
-SWORDS_X = (880, 990)      # the teal swords button at the right of each row
+MAX_FIGHTS = 10  # safety limit per run (daily attempts are usually 4)
+MAX_REFRESHES = 3  # per run, so a refresh can never loop
+LIST_TITLE = (0.1, 0.2, 0.9, 0.27)  # "Challenge List" box title
+FIGHT_BUTTON = (0.5, 0.9, 0.98, 0.99)  # Squad Settings: green "Fight" (bottom right; "Quick Deploy" is left)
+PAUSE_AREA = (0, 0.7, 0.4, 0.88)  # battle: pause button, bottom left (templates/battle_pause.png)
+RETREAT_AREA = (0.15, 0.53, 0.5, 0.63)  # paused: "Retreat" (left) / "Continue" (right)
+POWER_X = (285, 430)  # the power figure beside the fist icon: green = lower than mine, red = higher
+SWORDS_X = (880, 990)  # the teal swords button at the right of each row
 
 
 def attempts_left(phone: Phone) -> int:
@@ -173,7 +186,7 @@ def read_opponents(img: Image) -> list[tuple[int, bool, int | None]]:
     hsv = cv2.cvtColor(img[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
     coloured = (hsv[:, :, 1] > 120) & (hsv[:, :, 2] > 80)
     rows, start = [], None
-    for i, on in enumerate([*list(coloured.sum(axis=1) > 3), False]):     # bands of coloured digits = rows
+    for i, on in enumerate([*list(coloured.sum(axis=1) > 3), False]):  # bands of coloured digits = rows
         if on and start is None:
             start = i
         if not on and start is not None:
@@ -190,22 +203,26 @@ def power_value(img: Image, y: int) -> int | None:
     """The coloured power figure beside the fist, as a real number. Two formats: "15.9M" (1M and up, always one
     decimal) and "166,500" (under 1M, full number). OCR loses the dot and commas, so: digits read + whether there's
     an M. A reading of 1-3 digits can only be the M format (full numbers have 4+ digits)."""
-    part = img[y - 30:y + 30, POWER_X[0] - 10:POWER_X[1] + 10]
+    part = img[y - 30 : y + 30, POWER_X[0] - 10 : POWER_X[1] + 10]
     hsv = cv2.cvtColor(part, cv2.COLOR_BGR2HSV)
     sat, val = hsv[:, :, 1], hsv[:, :, 2]
     reads = []
-    for mask in ((sat > 100) & (val > 150),             # bright fill only, no dark outline: the most exact, so first
-                 sat > 120, sat > cv2.threshold(sat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[0]):
+    for mask in (
+        (sat > 100) & (val > 150),  # bright fill only, no dark outline: the most exact, so first
+        sat > 120,
+        sat > cv2.threshold(sat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[0],
+    ):
         big = cv2.resize(mask.astype(np.uint8) * 255, None, fx=4, fy=4, interpolation=cv2.INTER_NEAREST)
         big = cv2.copyMakeBorder(255 - big, 30, 30, 60, 30, cv2.BORDER_CONSTANT, value=255)
         for psm in (7, 8):
-            reads.append(pytesseract.image_to_string(
-                big, config=f"--psm {psm} -c tessedit_char_whitelist=0123456789.,M").strip())
-    digits = max((re.sub(r"\D", "", r) for r in reads), key=len)    # longest (first on a tie): OCR drops digits
+            reads.append(
+                pytesseract.image_to_string(big, config=f"--psm {psm} -c tessedit_char_whitelist=0123456789.,M").strip()
+            )
+    digits = max((re.sub(r"\D", "", r) for r in reads), key=len)  # longest (first on a tie): OCR drops digits
     if not digits:
         return None
     if any("M" in r for r in reads) or len(digits) <= 3:
-        return int(digits) * 100_000                                 # 159 -> 15.9M
+        return int(digits) * 100_000  # 159 -> 15.9M
     return int(digits)
 
 
@@ -220,12 +237,14 @@ def open_challenge_list(phone: Phone) -> None:
 def fight(phone: Phone, log: Logger, y: int) -> None:
     """Swords -> Squad Settings -> Fight -> pause -> Retreat -> result -> tap anywhere to exit."""
     tap_swords(phone, y)
-    phone.tap(text="Fight", region=FIGHT_BUTTON, timeout=15)          # Squad Settings: green Fight, bottom right
+    phone.tap(text="Fight", region=FIGHT_BUTTON, timeout=15)  # Squad Settings: green Fight, bottom right
     pause_and_retreat(phone)
     result = phone.wait_for(text="Tap anywhere", region=(0.15, 0.93, 0.85, 0.99), timeout=15)
-    outcome = phone.find(text=re.compile(r"Failed|Victory|Win", re.IGNORECASE), region=(0.1, 0.24, 0.9, 0.32), reuse=True)
+    outcome = phone.find(
+        text=re.compile(r"Failed|Victory|Win", re.IGNORECASE), region=(0.1, 0.24, 0.9, 0.32), reuse=True
+    )
     log.info("fight over: %s", outcome.text if outcome else "result shown")
-    phone.tap_xy(*result.center)                                     # "Tap anywhere to exit"
+    phone.tap_xy(*result.center)  # "Tap anywhere to exit"
     phone.wait_gone(text="Tap anywhere", region=(0.15, 0.93, 0.85, 0.99), timeout=10)
 
 
@@ -281,5 +300,5 @@ def read_standing(img: Image) -> tuple[int | None, int]:
     nums.sort()
     if not nums:
         raise RuntimeError("could not read the arena points")
-    rank = nums[0][1] if nums[0][0] < img.shape[1] * 0.2 else None      # left edge only ("Unranked" = None)
+    rank = nums[0][1] if nums[0][0] < img.shape[1] * 0.2 else None  # left edge only ("Unranked" = None)
     return rank, nums[-1][1]

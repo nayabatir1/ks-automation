@@ -9,6 +9,7 @@ Return when the job may run next:
     None            -> next slot of schedule= (or retry_minutes if there is none)
 Run it now:  .venv/bin/python run.py --job <name> --no-sleep
 """
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -26,6 +27,6 @@ if TYPE_CHECKING:
 
 @job(retry_minutes=30)
 def my_job(app: Kingshot, phone: Phone, log: Logger):
-    phone.tap(image="some_icon", region=Q4, timeout=10)    # templates/some_icon.png
-    phone.wait_for(text="Some title", timeout=10)          # confirm the screen changed
+    phone.tap(image="some_icon", region=Q4, timeout=10)  # templates/some_icon.png
+    phone.wait_for(text="Some title", timeout=10)  # confirm the screen changed
     return timedelta(hours=1)

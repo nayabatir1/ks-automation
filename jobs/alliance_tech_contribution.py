@@ -3,6 +3,7 @@
 Starts on the city screen or world map (bottom menu visible, no pop-up) — game.py's on_open/before_job
 open the game and close all pop-ups first.
 """
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -31,12 +32,14 @@ if TYPE_CHECKING:
 def alliance_tech_contribution(app: Kingshot, phone: Phone, log: Logger):
     # 1. "Alliance" in the bottom menu (Q4); its 99+ badge may or may not be there, so match the text
     app.tap_on_main(phone, log, text="Alliance", region=NAV_Q4, then={"text": "Alliance", "region": ALLIANCE_TITLE})
-    phone.wait_for(text="Alliance", region=ALLIANCE_TITLE, timeout=10)   # Alliance screen's title (top-left)
+    phone.wait_for(text="Alliance", region=ALLIANCE_TITLE, timeout=10)  # Alliance screen's title (top-left)
     log.info("alliance screen open")
 
     # 2. Tech button (top section of Q4); matched by its book icon + label, not the changing badge
     phone.tap(image="tech_button", region=Q4_TOP, timeout=10)
-    phone.wait_for(text="Your Rank", region=TECH_HEADER, timeout=10)  # tech screen ("Your Ranking: 59"; OCR sometimes drops the g)
+    phone.wait_for(
+        text="Your Rank", region=TECH_HEADER, timeout=10
+    )  # tech screen ("Your Ranking: 59"; OCR sometimes drops the g)
     log.info("alliance tech screen open")
 
     # 3. Covenant-Making node (bottom middle, between Q3 and Q4); matched by its castle art, not the 0/1 count
@@ -48,7 +51,7 @@ def alliance_tech_contribution(app: Kingshot, phone: Phone, log: Logger):
     #    !! The LEFT Contribute button (orange) spends GEMS and looks the same in grey, so: search only the
     #    right half of the box, and check the button really is teal before touching it.
     m = phone.wait_for(image="contribute_label", region=CONTRIBUTE_RIGHT, timeout=10)
-    button = (m.x - 40, m.y - 6, m.x + m.w + 40, m.y + m.h + 70)       # whole button around its label
+    button = (m.x - 40, m.y - 6, m.x + m.w + 40, m.y + m.h + 70)  # whole button around its label
     img = phone.last_screen
     if coloured_share(img, button) < 0.3:
         log.info("Contribute button is grey: no attempts left, nothing to hold")

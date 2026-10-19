@@ -4,6 +4,7 @@ Starts on the city screen or world map (bottom menu visible, no pop-up) — game
 open the game and close all pop-ups first; after_job backs out to where it started.
 The Q1 icons (gems, VIP, Events, Deals, Sign-in, ...) show on both the town and the world map.
 """
+
 from __future__ import annotations
 
 import re
@@ -59,16 +60,16 @@ if TYPE_CHECKING:
     from core.vision import Image, Region
     from game import Kingshot
 
-TAB_SWIPE = (900, 200)          # x from / to: one swipe shows the next ~2.5 tabs
+TAB_SWIPE = (900, 200)  # x from / to: one swipe shows the next ~2.5 tabs
 MAX_TAB_PAGES = 8
-BUBBLE_SCALES = (0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.1)   # bubbles are drawn smaller near the town edge
-MAX_MERCHANT_ROUNDS = 300      # buys + refreshes per run, so it can never loop (one stock took ~80 buys)
+BUBBLE_SCALES = (0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.1)  # bubbles are drawn smaller near the town edge
+MAX_MERCHANT_ROUNDS = 300  # buys + refreshes per run, so it can never loop (one stock took ~80 buys)
 SEARCH_SWIPE = (800, 450)
 PRICE_ROWS = (0, 0.32, 1, 0.67)  # merchant: the rows with the 6 boxes (icons and price bars)
-BLANK_SPOT_PX = (540, 300)      # dim area above reward pop-ups (no buttons behind it take the tap)
+BLANK_SPOT_PX = (540, 300)  # dim area above reward pop-ups (no buttons behind it take the tap)
 
 
-@job(schedule=At("00:05", tz="UTC"), priority=100, timeout=1800)   # 5:35am IST, after troops_training; merchant ~12 min
+@job(schedule=At("00:05", tz="UTC"), priority=100, timeout=1800)  # 5:35am IST, after troops_training; merchant ~12 min
 def dailies(app: Kingshot, phone: Phone, log: Logger):
     """The parts below, in order; each starts and ends on the city / world map.
     Test one part: run.py --job dailies --part vip   (several: --part gems,deals; all: leave --part out)"""
@@ -98,7 +99,7 @@ def vip(app: Kingshot, phone: Phone, log: Logger):
         dismiss_popup(phone)
         log.info("vip: daily VIP XP claimed")
     m = phone.find(text="Claim", region=VIP_BUNDLE_CLAIM)
-    button = (m.x - 80, m.y - 20, m.x + m.w + 80, m.y + m.h + 25) if m else None   # the button only, not the row
+    button = (m.x - 80, m.y - 20, m.x + m.w + 80, m.y + m.h + 25) if m else None  # the button only, not the row
     if m and 35 <= vision.median_hue(phone.last_screen, button) <= 85:
         phone.tap_xy(*m.center)
         dismiss_popup(phone)
@@ -113,8 +114,8 @@ def deals(app: Kingshot, phone: Phone, log: Logger):
     app.tap_on_main(phone, log, text="Deals", region=DEALS_LABEL)
     phone.wait_for(text="Deals", region=SCREEN_TITLE, timeout=10)
     log.info("deals open")
-    log.info("deals: %d free chest(s) claimed", claim_shop_tabs(phone, log, need_label=True))   # e.g. Treasure Cove
-    for tab in ("Earn", "Rall"):                        # "Sign-in & Earn It", "Hero Rally" (OCR-safe parts)
+    log.info("deals: %d free chest(s) claimed", claim_shop_tabs(phone, log, need_label=True))  # e.g. Treasure Cove
+    for tab in ("Earn", "Rall"):  # "Sign-in & Earn It", "Hero Rally" (OCR-safe parts)
         if open_tab(phone, tab):
             log.info("deals, %s: %d free reward(s) claimed", tab, claim_glowing(phone))
         else:
@@ -132,7 +133,7 @@ def bank(phone: Phone, log: Logger) -> None:
     text = phone.read_text(BANK_DAILY_BUTTON)
     if "Withdraw" in text:
         phone.tap_xy(*button_centre(BANK_DAILY_BUTTON))
-        dismiss_popup(phone)                             # Rewards: the gems back
+        dismiss_popup(phone)  # Rewards: the gems back
         log.info("bank: withdrew")
         phone.forget_screen()
         text = phone.read_text(BANK_DAILY_BUTTON)
@@ -170,7 +171,7 @@ def nomadic_merchant(app: Kingshot, phone: Phone, log: Logger):
     for round_no in range(MAX_MERCHANT_ROUNDS):
         # one screenshot of the price bars, all 6 evaluated; then tap each resource-priced one, but re-check that
         # one bar just before its tap (~0.3 s): a buy restocks and reorders the boxes, so a box can turn into gems
-        for _ in range(4):                               # a buy's animation can cover the bars for a moment
+        for _ in range(4):  # a buy's animation can cover the bars for a moment
             phone.forget_screen()
             img = phone.screen(PRICE_ROWS)
             if all(price_bar(img, xy) for xy in MERCHANT_PRICES):
@@ -182,7 +183,7 @@ def nomadic_merchant(app: Kingshot, phone: Phone, log: Logger):
                 phone.forget_screen()
                 now = phone.screen(box_region(xy))
                 if price_bar(now, xy) and not gem_price(now, xy):
-                    phone.tap_xy(*xy)                    # resources: bought at once
+                    phone.tap_xy(*xy)  # resources: bought at once
                     bought += 1
                     time.sleep(0.3)
                 elif price_bar(now, xy) and vip_xp(now, xy):
@@ -197,7 +198,7 @@ def nomadic_merchant(app: Kingshot, phone: Phone, log: Logger):
             break
         m = phone.find(text="Free Refresh", region=MERCHANT_REFRESH)
         if not m or not 35 <= vision.median_hue(phone.last_screen, MERCHANT_REFRESH) <= 85:
-            break                                        # all boxes cost gems and the refresh isn't free: done
+            break  # all boxes cost gems and the refresh isn't free: done
         phone.tap_xy(*m.center)
         refreshes += 1
         time.sleep(1)
@@ -239,16 +240,17 @@ def vip_xp(img: Image, xy: tuple[int, int]) -> bool:
 def price_bar(img: Image, xy: tuple[int, int]) -> bool:
     """Is a merchant price bar really there (cream background)? Guards against tapping when something covers it."""
     x, y = xy
-    hsv = cv2.cvtColor(img[y - 30:y + 30, x - 160:x + 160], cv2.COLOR_BGR2HSV)
-    cream = ((hsv[:, :, 0] >= 10) & (hsv[:, :, 0] <= 30) & (hsv[:, :, 1] >= 15) & (hsv[:, :, 1] <= 80)
-             & (hsv[:, :, 2] > 215))
+    hsv = cv2.cvtColor(img[y - 30 : y + 30, x - 160 : x + 160], cv2.COLOR_BGR2HSV)
+    cream = (
+        (hsv[:, :, 0] >= 10) & (hsv[:, :, 0] <= 30) & (hsv[:, :, 1] >= 15) & (hsv[:, :, 1] <= 80) & (hsv[:, :, 2] > 215)
+    )
     return 0.35 <= cream.mean() <= 0.75
 
 
 def gem_price(img: Image, xy: tuple[int, int]) -> bool:
     """Is this price bar in gems (a blue diamond before the number)?"""
     x, y = xy
-    hsv = cv2.cvtColor(img[y - 30:y + 30, x - 160:x + 160], cv2.COLOR_BGR2HSV)
+    hsv = cv2.cvtColor(img[y - 30 : y + 30, x - 160 : x + 160], cv2.COLOR_BGR2HSV)
     blue = (hsv[:, :, 0] >= 95) & (hsv[:, :, 0] <= 115) & (hsv[:, :, 1] > 120) & (hsv[:, :, 2] > 150)
     return bool(blue.sum() > 200)
 
@@ -259,7 +261,7 @@ def cassie_recruit(app: Kingshot, phone: Phone, log: Logger):
     view, tapped = app.town_from_launch(phone, log), 0
     for name in ("Barracks", "Enlistment Office"):
         x, y = go_to_building(phone, log, name, view=view)
-        view = (TOWN[name][0] - x, TOWN[name][1] + LABEL_TO_BUILDING - y)   # where the view is now
+        view = (TOWN[name][0] - x, TOWN[name][1] + LABEL_TO_BUILDING - y)  # where the view is now
         for _ in range(4):
             phone.forget_screen()
             m = vision.find_image(phone.screen(), "cassie_bubble", MAP_AREA, threshold=0.75, scales=BUBBLE_SCALES)
@@ -274,7 +276,7 @@ def cassie_recruit(app: Kingshot, phone: Phone, log: Logger):
 
 def truegold_crucible(app: Kingshot, phone: Phone, log: Logger):
     """World map -> side panel (">" tab, left middle) -> scroll to "Truegold Crucible" -> Truegold Crucible screen."""
-    if phone.exists(text="World", region=NAV_REGION):            # on the town: the button names the world map
+    if phone.exists(text="World", region=NAV_REGION):  # on the town: the button names the world map
         phone.tap(text="World", region=NAV_REGION)
         phone.wait_for(text="Town", region=NAV_REGION, timeout=15)
     phone.tap(image="side_tab", region=LEFT_MID, timeout=10)
@@ -312,8 +314,14 @@ def refines_left(phone: Phone, tries: int = 3) -> int | None:
     return None
 
 
-PARTS = {"gems": gems, "vip": vip, "deals": deals, "nomadic_merchant": nomadic_merchant,
-         "cassie_recruit": cassie_recruit, "truegold_crucible": truegold_crucible}
+PARTS = {
+    "gems": gems,
+    "vip": vip,
+    "deals": deals,
+    "nomadic_merchant": nomadic_merchant,
+    "cassie_recruit": cassie_recruit,
+    "truegold_crucible": truegold_crucible,
+}
 
 
 def back_to_main(phone: Phone) -> None:
@@ -324,7 +332,7 @@ def back_to_main(phone: Phone) -> None:
 
 def claim_shop_tabs(phone: Phone, log: Logger, need_label: bool = False) -> int:
     """Visit each red-dot tab (names and pictures change) and claim its free chest. Returns how many."""
-    for _ in range(3):                                   # tab row back to its start
+    for _ in range(3):  # tab row back to its start
         if not swipe_tabs(phone, TAB_SWIPE[1], TAB_SWIPE[0]):
             break
     claimed = 0
@@ -335,13 +343,13 @@ def claim_shop_tabs(phone: Phone, log: Logger, need_label: bool = False) -> int:
             if not dots:
                 break
             x, _ = dots[0]
-            tried.add(x // 60)                           # a dot that stays (nothing free after all) is tried once
+            tried.add(x // 60)  # a dot that stays (nothing free after all) is tried once
             phone.tap_xy(max(40, x - 140), SHOP_TAB_ROW_Y)
             time.sleep(1)
             phone.forget_screen()
             claimed += claim_free_chest(phone, log, need_label)
         if not swipe_tabs(phone, *TAB_SWIPE):
-            break                                        # end of the tab row
+            break  # end of the tab row
     return claimed
 
 
@@ -357,38 +365,41 @@ def swipe_tabs(phone: Phone, x_from: int, x_to: int) -> bool:
 def claim_free_chest(phone: Phone, log: Logger, need_label: bool = False) -> int:
     """The open tab's free chest, in the header: a chest with its own red dot (labelled "Claimable"), or one
     labelled "Free" (Daily Deals). Some show a "Claimed" pop-up afterwards. Returns 1 if claimed, else 0."""
-    for _ in range(5):                                   # the tab's content can take a few seconds to draw
+    for _ in range(5):  # the tab's content can take a few seconds to draw
         img = phone.screen()
         dots = vision.red_dots(img, SHOP_FREE_AREA)
         label = free_label(img) if need_label or not dots else None
-        if need_label and not label:                     # Deals: a red dot alone isn't enough (Hall of Heroes...)
+        if need_label and not label:  # Deals: a red dot alone isn't enough (Hall of Heroes...)
             dots = []
         if dots or label:
             break
         time.sleep(0.8)
         phone.forget_screen()
     if dots:
-        x, y = dots[0][0] - 40, dots[0][1] + 25          # the dot sits at the chest's top right
+        x, y = dots[0][0] - 40, dots[0][1] + 25  # the dot sits at the chest's top right
     elif label:
-        x, y = label[0], label[1] - 75                   # the chest is just above its label
+        x, y = label[0], label[1] - 75  # the chest is just above its label
     else:
         log.info("tab has a red dot but no free chest found")
         return 0
     phone.tap_xy(x, y)
     log.info("claimed the free chest at (%d, %d)", x, y)
-    dismiss_popup(phone, wait=2)                         # "Claimed" pop-up (some tabs only)
+    dismiss_popup(phone, wait=2)  # "Claimed" pop-up (some tabs only)
     return 1
 
 
 def dismiss_popup(phone: Phone, wait: float = 10) -> None:
     """Close a reward pop-up ("Click to continue" / "Tap anywhere to exit") by tapping the dim area above it;
     taps during its opening animation are ignored, so tap until it's gone. No pop-up within `wait` s: nothing to do."""
-    if not phone.exists(text=re.compile(r"Click to continue|Tap anywhere", re.IGNORECASE), region=POPUP_CONTINUE, timeout=wait):
+    if not phone.exists(
+        text=re.compile(r"Click to continue|Tap anywhere", re.IGNORECASE), region=POPUP_CONTINUE, timeout=wait
+    ):
         return
     for _ in range(6):
         phone.tap_xy(*BLANK_SPOT_PX)
-        if not phone.exists(text=re.compile(r"Click to continue|Tap anywhere", re.IGNORECASE), region=POPUP_CONTINUE,
-                            timeout=1.2):
+        if not phone.exists(
+            text=re.compile(r"Click to continue|Tap anywhere", re.IGNORECASE), region=POPUP_CONTINUE, timeout=1.2
+        ):
             break
     phone.forget_screen()
 
@@ -398,7 +409,7 @@ def open_tab(phone: Phone, name: str) -> bool:
     The open tab shows no name in the row, only its big title."""
     if phone.exists(text=name, region=TAB_TITLE):
         return True
-    for _ in range(4):                                   # back to the start of the row
+    for _ in range(4):  # back to the start of the row
         if not swipe_tabs(phone, TAB_SWIPE[1], TAB_SWIPE[0]):
             break
     for _ in range(MAX_TAB_PAGES * 2):
@@ -408,7 +419,7 @@ def open_tab(phone: Phone, name: str) -> bool:
             time.sleep(1)
             phone.forget_screen()
             return True
-        if not swipe_tabs(phone, *SEARCH_SWIPE):        # short steps: a tab cut off at the edge can't be read
+        if not swipe_tabs(phone, *SEARCH_SWIPE):  # short steps: a tab cut off at the edge can't be read
             return False
     return False
 
@@ -416,7 +427,7 @@ def open_tab(phone: Phone, name: str) -> bool:
 def claim_glowing(phone: Phone, most: int = 7) -> int:
     """Tap each glowing (claimable) item of the Free column until none glows. Returns how many."""
     for n in range(most):
-        for _ in range(5 if n == 0 else 1):              # a freshly opened tab scrolls to today first: wait for it
+        for _ in range(5 if n == 0 else 1):  # a freshly opened tab scrolls to today first: wait for it
             item = glowing_item(phone.screen())
             if item:
                 break
@@ -435,7 +446,9 @@ def glowing_item(img: Image) -> tuple[int, int] | None:
     line along its top and another 110-160 px below it (white text on items is much shorter). Or None."""
     x1, y1, x2, y2 = FREE_COLUMN
     hsv = cv2.cvtColor(img[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
-    pale = (hsv[:, :, 0] >= 18) & (hsv[:, :, 0] <= 40) & (hsv[:, :, 1] < 130) & (hsv[:, :, 2] > 190)   # pale yellow; it pulses
+    pale = (
+        (hsv[:, :, 0] >= 18) & (hsv[:, :, 0] <= 40) & (hsv[:, :, 1] < 130) & (hsv[:, :, 2] > 190)
+    )  # pale yellow; it pulses
     lines = []
     for y in range(pale.shape[0]):
         edges = np.diff(np.concatenate([[0], pale[y].astype(np.int8), [0]]))

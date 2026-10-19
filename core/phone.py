@@ -15,6 +15,7 @@ Other helpers: tap_xy, hold_xy, swipe, read_text, read_duration, type_text, back
     region=(0, 0.8, 1, 1)         only look in the bottom 20% (fractions) ...
     region=(0, 1800, 1080, 2340)  ... or pixels x1, y1, x2, y2
 """
+
 import atexit
 import json
 import logging
@@ -37,7 +38,7 @@ log = logging.getLogger("phone")
 
 KEY_HOME, KEY_BACK, KEY_ENTER, KEY_MENU = 3, 4, 66, 82
 KEY_SLEEP, KEY_WAKEUP = 223, 224
-REUSE_SECONDS = 1.0       # a screenshot this fresh (and with no input since) may be reused by the next check
+REUSE_SECONDS = 1.0  # a screenshot this fresh (and with no input since) may be reused by the next check
 
 
 class PhoneError(Exception):
@@ -49,8 +50,7 @@ class ElementNotFound(PhoneError):
 
 
 def _describe(text: TextTarget | None = None, image: str | None = None, region: Region | None = None) -> str:
-    s = f"text={text.pattern if isinstance(text, re.Pattern) else text!r}" if text is not None \
-        else f"image={image!r}"
+    s = f"text={text.pattern if isinstance(text, re.Pattern) else text!r}" if text is not None else f"image={image!r}"
     return s + (f" region={region}" if region else "")
 
 
@@ -71,17 +71,25 @@ class Phone:
         self.serial = serial
         self.pin = pin
         self.launch_timeout = launch_timeout
-        self._last_screen: Image | None = None   # last screenshot taken (numpy BGR), used for failure reports
+        self._last_screen: Image | None = None  # last screenshot taken (numpy BGR), used for failure reports
         state = device_state(serial)
         if state != "device":
-            raise PhoneError(f"Phone not available ({state}). Check `adb devices`: it must "
-                             f"say 'device' (not 'unauthorized'/'offline'); replug USB / accept the prompt.")
+            raise PhoneError(
+                f"Phone not available ({state}). Check `adb devices`: it must "
+                f"say 'device' (not 'unauthorized'/'offline'); replug USB / accept the prompt."
+            )
         if not self.serial:
             self.serial = self._adb("get-serialno").stdout.decode().strip()
         self.width, self.height = self._screen_size()
-        self._monkey: TextIO | Literal[False] | None = None   # fast input connection (see tap_xy); False = monkey unusable, use `input`
-        self._raw: tuple[int, int, int] | None = None   # (header, w, h) of raw screenshots, once known (for strip screenshots)
-        self._shot: tuple[float, int, int] | None = None   # (time, y1, y2) of last_screen, while it still shows the screen
+        self._monkey: TextIO | Literal[False] | None = (
+            None  # fast input connection (see tap_xy); False = monkey unusable, use `input`
+        )
+        self._raw: tuple[int, int, int] | None = (
+            None  # (header, w, h) of raw screenshots, once known (for strip screenshots)
+        )
+        self._shot: tuple[float, int, int] | None = (
+            None  # (time, y1, y2) of last_screen, while it still shows the screen
+        )
         log.info("Connected to %s (%dx%d)", self.serial, self.width, self.height)
 
     # ------------------------------------------------------------------ adb
@@ -187,8 +195,10 @@ class Phone:
                 time.sleep(0.5)
                 return
             time.sleep(0.5)
-        raise PhoneError(f"{package} did not come to the foreground in {self.launch_timeout}s "
-                         f"(foreground: {self.current_app() or 'unknown'})")
+        raise PhoneError(
+            f"{package} did not come to the foreground in {self.launch_timeout}s "
+            f"(foreground: {self.current_app() or 'unknown'})"
+        )
 
     def close(self, package: str) -> None:
         log.info("Closing %s", package)
@@ -207,16 +217,16 @@ class Phone:
                 _, y1, _, y2 = vision.resolve_region(region, img.shape)
                 self._keep(img, y1, y2)
                 return img
-        raw = self._adb("exec-out", "screencap", timeout=30).stdout   # raw is ~4x faster than -p
+        raw = self._adb("exec-out", "screencap", timeout=30).stdout  # raw is ~4x faster than -p
         img = None
         if len(raw) >= 12:
             w, h = (int(v) for v in np.frombuffer(raw[:8], "<u4"))
             header = len(raw) - w * h * 4
             if header in (12, 16):
                 rgba = np.frombuffer(raw, np.uint8, offset=header).reshape(h, w, 4)
-                img = np.ascontiguousarray(rgba[:, :, 2::-1])           # RGBA -> BGR
+                img = np.ascontiguousarray(rgba[:, :, 2::-1])  # RGBA -> BGR
                 self._raw = (header, w, h)
-        if img is None:                                                 # unknown format: use PNG
+        if img is None:  # unknown format: use PNG
             img = vision.decode_png(self._adb("exec-out", "screencap", "-p", timeout=30).stdout)
         self._keep(img, 0, img.shape[0])
         return img
@@ -255,7 +265,7 @@ class Phone:
         cmd = f"screencap | tail -c +{header + y1 * row + 1} | head -c {(y2 - y1) * row}"
         raw = self._adb("exec-out", cmd, timeout=30).stdout
         if len(raw) != (y2 - y1) * row:
-            return None                                                 # odd size (rotated?): full screenshot
+            return None  # odd size (rotated?): full screenshot
         img = np.zeros((h, w, 3), np.uint8)
         img[y1:y2] = np.frombuffer(raw, np.uint8).reshape(y2 - y1, w, 4)[:, :, 2::-1]
         return img
@@ -269,6 +279,7 @@ class Phone:
 
     def screenshot(self, path: str | Path) -> None:
         import cv2
+
         cv2.imwrite(str(path), self.screen())
 
     def save_ocr(self, path: Path, img: Image | None = None) -> None:
@@ -278,8 +289,9 @@ class Phone:
         path.write_text("\n".join(str(m) for m in lines) + "\n")
 
     # ------------------------------------------------------------------ finding things
-    def _locate(self, img: Image, text: TextTarget | None = None, image: str | None = None,
-                region: Region | None = None) -> vision.Match | None:
+    def _locate(
+        self, img: Image, text: TextTarget | None = None, image: str | None = None, region: Region | None = None
+    ) -> vision.Match | None:
         if (text is None) == (image is None):
             raise ValueError("pass exactly one of text= or image=")
         if text is not None:
@@ -287,22 +299,33 @@ class Phone:
         assert image is not None
         return vision.find_image(img, image, region)
 
-    def find(self, text: TextTarget | None = None, image: str | None = None, region: Region | None = None,
-             reuse: bool = False) -> vision.Match | None:
+    def find(
+        self,
+        text: TextTarget | None = None,
+        image: str | None = None,
+        region: Region | None = None,
+        reuse: bool = False,
+    ) -> vision.Match | None:
         """Look once. Returns a vision.Match (with .center) or None. reuse=True may use a screenshot from
         just now (see _screen_for) instead of taking a new one."""
         return self._locate(self._screen_for(region, reuse), text, image, region)
 
-    def exists(self, text: TextTarget | None = None, image: str | None = None, region: Region | None = None,
-               timeout: float = 0) -> bool:
+    def exists(
+        self, text: TextTarget | None = None, image: str | None = None, region: Region | None = None, timeout: float = 0
+    ) -> bool:
         try:
             self.wait_for(text=text, image=image, region=region, timeout=timeout)
             return True
         except ElementNotFound:
             return False
 
-    def wait_for(self, text: TextTarget | None = None, image: str | None = None, region: Region | None = None,
-                 timeout: float = 15) -> vision.Match:
+    def wait_for(
+        self,
+        text: TextTarget | None = None,
+        image: str | None = None,
+        region: Region | None = None,
+        timeout: float = 15,
+    ) -> vision.Match:
         """Wait until it appears; returns the Match. Raises ElementNotFound."""
         end, first = time.time() + timeout, True
         while True:
@@ -315,8 +338,13 @@ class Phone:
                 raise ElementNotFound(f"Not found after {timeout}s: {_describe(text, image, region)}")
             time.sleep(config.POLL_INTERVAL)
 
-    def wait_gone(self, text: TextTarget | None = None, image: str | None = None, region: Region | None = None,
-                  timeout: float = 30) -> None:
+    def wait_gone(
+        self,
+        text: TextTarget | None = None,
+        image: str | None = None,
+        region: Region | None = None,
+        timeout: float = 30,
+    ) -> None:
         """Wait until it disappears (e.g. a 'Loading' label)."""
         end, first = time.time() + timeout, True
         while self.find(text, image, region, reuse=first):
@@ -372,20 +400,23 @@ class Phone:
 
     def _start_monkey(self):
         port = config.MONKEY_PORT
-        self._adb("shell", "for p in $(pidof com.android.commands.monkey); do kill $p; done",
-                  check=False)                                          # a leftover from a crashed run
+        self._adb(
+            "shell", "for p in $(pidof com.android.commands.monkey); do kill $p; done", check=False
+        )  # a leftover from a crashed run
         self._monkey_proc = subprocess.Popen(
             ["adb"] + (["-s", self.serial] if self.serial else []) + ["shell", "monkey", "--port", str(port)],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
         self._adb("forward", f"tcp:{port}", f"tcp:{port}")
         end = time.time() + 10
-        while True:                                                         # monkey takes ~1.5 s to start
+        while True:  # monkey takes ~1.5 s to start
             try:
                 sock = socket.create_connection(("127.0.0.1", port), timeout=10)
                 self._monkey = sock.makefile("rw")
                 self._monkey_sock = sock
                 if self._monkey_cmd_raw("wake"):
-                    atexit.register(self.close_input)            # never leave monkey running on the phone
+                    atexit.register(self.close_input)  # never leave monkey running on the phone
                     return
             except OSError:
                 pass
@@ -432,16 +463,24 @@ class Phone:
             self.shell(f"input tap {x} {y}")
         time.sleep(pause)
 
-    def tap(self, text: TextTarget | None = None, image: str | None = None, region: Region | None = None,
-            timeout: float = 10, offset: tuple[int, int] = (0, 0), pause: float = 0.3) -> vision.Match:
+    def tap(
+        self,
+        text: TextTarget | None = None,
+        image: str | None = None,
+        region: Region | None = None,
+        timeout: float = 10,
+        offset: tuple[int, int] = (0, 0),
+        pause: float = 0.3,
+    ) -> vision.Match:
         """Wait for it, then tap its centre (+ offset pixels). Returns the Match."""
         m = self.wait_for(text, image, region, timeout)
         cx, cy = m.center
         self.tap_xy(cx + offset[0], cy + offset[1], pause)
         return m
 
-    def tap_if_present(self, text: TextTarget | None = None, image: str | None = None, region: Region | None = None,
-                       timeout: float = 2) -> bool:
+    def tap_if_present(
+        self, text: TextTarget | None = None, image: str | None = None, region: Region | None = None, timeout: float = 2
+    ) -> bool:
         """Tap it if it shows up (handy for random pop-ups). Returns True if tapped."""
         try:
             self.tap(text, image, region, timeout)
@@ -458,7 +497,7 @@ class Phone:
             try:
                 time.sleep(seconds)
             finally:
-                self._monkey_cmd(f"touch up {x} {y}")      # always lift the finger, even on a timeout
+                self._monkey_cmd(f"touch up {x} {y}")  # always lift the finger, even on a timeout
         else:
             self.shell(f"input swipe {x} {y} {x} {y} {int(seconds * 1000)}", timeout=seconds + 15)
 
@@ -469,8 +508,15 @@ class Phone:
         x2, y2 = self._xy(x2, y2)
         self.shell(f"input swipe {x1} {y1} {x2} {y2} {int(ms)}")
 
-    def scroll_to(self, text: TextTarget | None = None, image: str | None = None, region: Region | None = None,
-                  direction: str = "down", max_swipes: int = 10, ms: int = 400) -> vision.Match:
+    def scroll_to(
+        self,
+        text: TextTarget | None = None,
+        image: str | None = None,
+        region: Region | None = None,
+        direction: str = "down",
+        max_swipes: int = 10,
+        ms: int = 400,
+    ) -> vision.Match:
         """Swipe through a list until it's visible; returns the Match. With region=, both the search
         and the swipes stay inside that area (e.g. a panel over an animated map).
 
@@ -490,7 +536,7 @@ class Phone:
         img = self.screen(region)
         m = self._locate(img, text, image, region)
         if not m and memory.get(key):
-            for _ in range(memory[key]):                  # the usual distance, in one go
+            for _ in range(memory[key]):  # the usual distance, in one go
                 swipe()
             swipes = memory[key]
             time.sleep(0.4)
@@ -498,11 +544,11 @@ class Phone:
             m = self._locate(img, text, image, region)
         while not m and swipes < max_swipes:
             if prev is not None and vision.screen_diff(prev, img, region) < 1.0:
-                break                                     # list didn't move: end of the list
+                break  # list didn't move: end of the list
             prev = img
             swipe()
             swipes += 1
-            time.sleep(0.4)                               # let the list settle
+            time.sleep(0.4)  # let the list settle
             img = self.screen(region)
             m = self._locate(img, text, image, region)
         if not m:
@@ -542,13 +588,15 @@ class Phone:
         """Read a countdown like '03:12:45' or '2h 5m' from the screen -> timedelta, or None.
         Two-part clocks are mm:ss unless two_part="hm"."""
         from core.timeparse import parse_duration
+
         text = self.read_text(region)
         d = parse_duration(text, two_part)
         log.debug("read_duration %r -> %s", text, d)
         return d
 
-    def wait_stable(self, region: Region | None = None, timeout: float = 15, still_for: float = 1.0,
-                    tolerance: float = 1.5) -> None:
+    def wait_stable(
+        self, region: Region | None = None, timeout: float = 15, still_for: float = 1.0, tolerance: float = 1.5
+    ) -> None:
         """Wait until the screen (or region) stops changing for `still_for` seconds."""
         end = time.time() + timeout
         prev = self.screen(region)

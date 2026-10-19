@@ -5,6 +5,7 @@ tabs switch between Barracks / Stable / Range; on each: its quantity (TROOPS_QUA
 training shows "Speedups" instead of Train and is left alone.
 !! Never Finish (gems) or Speedups.
 """
+
 from __future__ import annotations
 
 import re
@@ -32,16 +33,25 @@ if TYPE_CHECKING:
     from core.phone import Phone
     from game import Kingshot
 
-TROOP_TITLE = re.compile(r"Apex|Truegold")   # training page title: "Apex Infantry", "Truegold Archers", ...
-TROOPS_QUANTITY = {"Barracks": 950, "Stable": 950, "Range": 820}   # troops per training, by building
-QTY_BOX = (810, 1892)             # the quantity box
+TROOP_TITLE = re.compile(r"Apex|Truegold")  # training page title: "Apex Infantry", "Truegold Archers", ...
+TROOPS_QUANTITY = {
+    "Barracks": 950,
+    "Stable": 950,
+    "Range": 820,
+}  # troops per training, by building
+QTY_BOX = (810, 1892)  # the quantity box
 
 
-@job(schedule=At("00:05", "12:00", tz="UTC"), priority=90)   # 5:35am + 5:30pm IST, first in those sessions
+@job(schedule=At("00:05", "12:00", tz="UTC"), priority=90)  # 5:35am + 5:30pm IST, first in those sessions
 def troops_training(app: Kingshot, phone: Phone, log: Logger):
-    x, y = go_to_building(phone, log, "Barracks", view=app.town_from_launch(phone, log),
-                          unblock=lambda: app.close_popups(phone, log, timeout=5))   # e.g. a late "Welcome back!"
-    if abs(x - 540) > 100:                               # its tap menu reaches ~300 px right: centre it first
+    x, y = go_to_building(
+        phone,
+        log,
+        "Barracks",
+        view=app.town_from_launch(phone, log),
+        unblock=lambda: app.close_popups(phone, log, timeout=5),
+    )  # e.g. a late "Welcome back!"
+    if abs(x - 540) > 100:  # its tap menu reaches ~300 px right: centre it first
         drag(phone, x - 540, 0)
         m = find_building(phone, "Barracks")
         if not m:
@@ -56,7 +66,7 @@ def troops_training(app: Kingshot, phone: Phone, log: Logger):
         quantity = TROOPS_QUANTITY[tab]
         phone.tap_xy(*xy)
         phone.wait_for(text=TROOP_TITLE, region=TRAIN_TITLE, timeout=10)
-        time.sleep(1.5)                                  # the page settles (it can show "Train" for a moment)
+        time.sleep(1.5)  # the page settles (it can show "Train" for a moment)
         phone.forget_screen()
         if phone.exists(text="Training", region=TRAIN_TIMER):
             log.info("%s: still training", tab)
@@ -71,7 +81,7 @@ def troops_training(app: Kingshot, phone: Phone, log: Logger):
         wait = parse_duration(phone.read_text(TRAIN_TIMER))
         if wait:
             waits.append(wait)
-    phone.back()                                         # training page -> town
+    phone.back()  # training page -> town
     log.info("next training done in %s", min(waits) if waits else "?")
 
 
@@ -86,13 +96,13 @@ def open_training(phone: Phone, x: int, y: int) -> None:
             continue
     else:
         raise ElementNotFound("the Barracks menu (Details / Upgrade / Train) didn't show")
-    phone.tap_xy(m.center[0], m.center[1] - 88)         # the hexagon icon above its label
+    phone.tap_xy(m.center[0], m.center[1] - 88)  # the hexagon icon above its label
     phone.wait_for(text=TROOP_TITLE, region=TRAIN_TITLE, timeout=10)
 
 
 def set_quantity(phone: Phone, quantity: int) -> None:
     phone.tap_xy(*QTY_BOX)
-    phone.wait_for(text="OK", region=TRAIN_QTY_FIELD, timeout=3)   # !! else OK's spot is the Speedups button
+    phone.wait_for(text="OK", region=TRAIN_QTY_FIELD, timeout=3)  # !! else OK's spot is the Speedups button
     phone.key("KEYCODE_MOVE_END")
     for _ in range(6):
         phone.key("KEYCODE_DEL")
@@ -103,4 +113,3 @@ def set_quantity(phone: Phone, quantity: int) -> None:
     read = phone.read_text(TRAIN_QTY).replace(",", "")
     if str(quantity) not in read:
         raise RuntimeError(f"quantity reads {read!r}, not {quantity}; not training")
-

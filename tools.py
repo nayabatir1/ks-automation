@@ -20,6 +20,7 @@
 
 Coordinates are pixels; fractions like 0.5 also work (x 0-1, y 0-1).
 """
+
 import sys
 import time
 
@@ -56,8 +57,10 @@ def main(argv: list[str]) -> int:
         lines = vision.ocr_lines(p.screen(), _region(args))
         for m in lines:
             print(m)
-        print(f"-- {len(lines)} lines in {time.monotonic() - t:.1f}s  "
-              f"([light] = found by the white-text pass)  screen {p.width}x{p.height}")
+        print(
+            f"-- {len(lines)} lines in {time.monotonic() - t:.1f}s  "
+            f"([light] = found by the white-text pass)  screen {p.width}x{p.height}"
+        )
     elif cmd == "find":
         if not args:
             print('usage: tools.py find "text" [x1 y1 x2 y2]')
@@ -74,6 +77,7 @@ def main(argv: list[str]) -> int:
             print("usage: tools.py crop x1 y1 x2 y2 NAME")
             return 2
         import cv2
+
         shot = p.screen()
         part, _ = vision.crop(shot, _region(args))
         config.TEMPLATE_DIR.mkdir(exist_ok=True)
@@ -87,12 +91,17 @@ def main(argv: list[str]) -> int:
             return 2
         import cv2
         import numpy as np
+
         img = p.screen()
-        scales = tuple(np.round(np.arange(1.0, 4.01, 0.05), 2))   # PC screenshots are smaller than the phone; tiny scales give false hits
+        scales = tuple(
+            np.round(np.arange(1.0, 4.01, 0.05), 2)
+        )  # PC screenshots are smaller than the phone; tiny scales give false hits
         m = vision.find_image(img, args[0], _region(args[2:]), threshold=0.01, scales=scales)
         if not m or m.score < 0.6:
-            print(f"could not find {args[0]} on screen (best score {m.score if m else 0:.2f}); "
-                  f"is the right screen showing?")
+            print(
+                f"could not find {args[0]} on screen (best score {m.score if m else 0:.2f}); "
+                f"is the right screen showing?"
+            )
             return 1
         part, _ = vision.crop(img, m.box)
         out = config.TEMPLATE_DIR / f"{args[1]}.png"
@@ -140,4 +149,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))   # (Phone stops its fast-input helper on exit by itself)
+    sys.exit(main(sys.argv[1:]))  # (Phone stops its fast-input helper on exit by itself)

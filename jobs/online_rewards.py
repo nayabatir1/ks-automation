@@ -5,6 +5,7 @@ claims it, then the chest screen tells when the next one is ready. Not listed: l
 Starts on the city screen or world map (bottom menu visible, no pop-up) — game.py's on_open/before_job
 see to that.
 """
+
 from __future__ import annotations
 
 import time
@@ -37,7 +38,7 @@ if TYPE_CHECKING:
     from game import Kingshot
 
 NO_REWARD_RETRY = timedelta(minutes=30)
-TICK_X = 606                 # the green tick at the right end of the Online Rewards row
+TICK_X = 606  # the green tick at the right end of the Online Rewards row
 
 
 def no_reward_yet(app: Kingshot, log: Logger) -> datetime | timedelta:
@@ -71,8 +72,12 @@ def online_rewards(app: Kingshot, phone: Phone, log: Logger):
 
     # 2. side tab ">" on the left edge, middle of the screen -> side panel (tabs Town / Wilderness / Daily).
     #    Skip if the panel is already open (the tab is hidden then).
-    if phone.wait_any({"text": "Wilderness", "region": SIDE_PANEL},
-                      {"image": "side_tab", "region": LEFT_MID}, timeout=10) == 0:
+    if (
+        phone.wait_any(
+            {"text": "Wilderness", "region": SIDE_PANEL}, {"image": "side_tab", "region": LEFT_MID}, timeout=10
+        )
+        == 0
+    ):
         log.info("side panel already open")
     else:
         phone.tap(image="side_tab", region=LEFT_MID, timeout=5)
@@ -100,7 +105,7 @@ def online_rewards(app: Kingshot, phone: Phone, log: Logger):
     # 5. its green tick (right end of the row) claims the chest -> chest screen with "Next Chest Ready In: 01:47:56"
     tick = (TICK_X, m.center[1] + 23)
     hue = median_hue(phone.last_screen, (tick[0] - 35, tick[1] - 30, tick[0] + 35, tick[1] + 30))
-    if not 65 <= hue <= 86:                               # green tick ~79; the teal arrow buttons ~92
+    if not 65 <= hue <= 86:  # green tick ~79; the teal arrow buttons ~92
         raise RuntimeError(f"Online Rewards: no green tick at {tick} (hue {hue:.0f}); not tapping")
     phone.tap_xy(*tick)
     phone.wait_for(text="Next Chest Ready", region=CHEST_TIMER, timeout=10)
@@ -113,12 +118,12 @@ def online_rewards(app: Kingshot, phone: Phone, log: Logger):
     log.info("next chest in %s", wait)
     phone.tap_xy(*BLANK_SPOT)
     phone.wait_gone(text="Next Chest Ready", region=CHEST_TIMER, timeout=10)
-    close_panel(phone)                                    # usually already closed
-    return wait + timedelta(seconds=10)                   # a little after it's ready
+    close_panel(phone)  # usually already closed
+    return wait + timedelta(seconds=10)  # a little after it's ready
 
 
 def daily_tab_chosen(img: Image) -> bool:
     """The chosen tab is bright (median brightness ~180); the others are dark (~99)."""
     x, y = SIDE_PANEL_DAILY_TAB
-    hsv = cv2.cvtColor(img[y - 30:y + 30, x - 90:x + 90], cv2.COLOR_BGR2HSV)
+    hsv = cv2.cvtColor(img[y - 30 : y + 30, x - 90 : x + 90], cv2.COLOR_BGR2HSV)
     return float(np.median(hsv[:, :, 2])) > 140
