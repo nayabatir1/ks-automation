@@ -62,7 +62,7 @@ Nothing is lost when it's off: code, `state.json` and logs stay.
 
 | Job | When (IST) | What it does |
 |---|---|---|
-| troops_training | 5:35 am, 5:30 pm | Barracks → Train page → Barracks / Stable / Range: 950 each when idle |
+| troops_training | 5:35 am, 5:30 pm | Barracks → Train page → Barracks 950 / Stable 950 / Range 820 when idle |
 | dailies | 5:35 am | parts: gems, vip, deals (+ Bank), nomadic_merchant, cassie_recruit, truegold_crucible |
 | collect_stamina | 5:35 am, 5:30 pm | Intel Mission → meat icon → Gourmet Feast when lit |
 | intel_mission | 5:35 am, 5:30 pm | claim ticked pins; tent Rescue, swords Conquer, bear/lion Attack (preset M1); never boss |

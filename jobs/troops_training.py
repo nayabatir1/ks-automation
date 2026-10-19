@@ -1,8 +1,8 @@
 """Kingshot job: troops training. 00:05 + 12:00 UTC (5:35am + 5:30pm IST), first job of those sessions.
 
 Town: Barracks -> tap twice (the first tap collects finished troops) -> menu "Train" -> training page. Its bottom
-tabs switch between Barracks / Stable / Range; on each: quantity 950 -> Train. A tab that is still training shows
-"Speedups" instead of Train and is left alone.
+tabs switch between Barracks / Stable / Range; on each: its quantity (TROOPS_QUANTITY) -> Train. A tab that is still
+training shows "Speedups" instead of Train and is left alone.
 !! Never Finish (gems) or Speedups.
 """
 from __future__ import annotations
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from game import Kingshot
 
 TROOP_TITLE = re.compile(r"Apex|Truegold")   # training page title: "Apex Infantry", "Truegold Archers", ...
-QUANTITY = 820
+TROOPS_QUANTITY = {"Barracks": 950, "Stable": 950, "Range": 820}   # troops per training, by building
 QTY_BOX = (810, 1892)             # the quantity box
 
 
@@ -53,6 +53,7 @@ def troops_training(app: Kingshot, phone: Phone, log: Logger):
 
     waits = []
     for tab, xy in TRAIN_TABS.items():
+        quantity = TROOPS_QUANTITY[tab]
         phone.tap_xy(*xy)
         phone.wait_for(text=TROOP_TITLE, region=TRAIN_TITLE, timeout=10)
         time.sleep(1.5)                                  # the page settles (it can show "Train" for a moment)
@@ -60,10 +61,10 @@ def troops_training(app: Kingshot, phone: Phone, log: Logger):
         if phone.exists(text="Training", region=TRAIN_TIMER):
             log.info("%s: still training", tab)
         elif phone.exists(text="Train", region=TRAIN_BUTTON):
-            set_quantity(phone)
+            set_quantity(phone, quantity)
             phone.tap(text="Train", region=TRAIN_BUTTON, timeout=5)
             time.sleep(1.5)
-            log.info("%s: training %d", tab, QUANTITY)
+            log.info("%s: training %d", tab, quantity)
         else:
             raise RuntimeError(f"{tab}: neither Training nor a Train button; not touching it")
         phone.forget_screen()
@@ -89,17 +90,17 @@ def open_training(phone: Phone, x: int, y: int) -> None:
     phone.wait_for(text=TROOP_TITLE, region=TRAIN_TITLE, timeout=10)
 
 
-def set_quantity(phone: Phone) -> None:
+def set_quantity(phone: Phone, quantity: int) -> None:
     phone.tap_xy(*QTY_BOX)
     phone.wait_for(text="OK", region=TRAIN_QTY_FIELD, timeout=3)   # !! else OK's spot is the Speedups button
     phone.key("KEYCODE_MOVE_END")
     for _ in range(6):
         phone.key("KEYCODE_DEL")
-    phone.type_text(str(QUANTITY))
+    phone.type_text(str(quantity))
     phone.tap(text="OK", region=TRAIN_QTY_FIELD, timeout=3)
     time.sleep(1)
     phone.forget_screen()
     read = phone.read_text(TRAIN_QTY).replace(",", "")
-    if str(QUANTITY) not in read:
-        raise RuntimeError(f"quantity reads {read!r}, not {QUANTITY}; not training")
+    if str(quantity) not in read:
+        raise RuntimeError(f"quantity reads {read!r}, not {quantity}; not training")
 
