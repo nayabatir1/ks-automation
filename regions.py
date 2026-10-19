@@ -133,7 +133,6 @@ TILE_GATHER = (0.3, 0.48, 0.7, 0.53)  # found tile box: teal "Gather" (the "+" b
 HERO_MINUS = {2: (641, 586), 3: (925, 586)}  # formation page: the orange "-" of hero cards 2 and 3
 SAME_TARGET_CANCEL = (0.05, 0.58, 0.5, 0.66)  # "Other Troops are marching toward the same target": orange Cancel
 SEARCH_LEVEL_BOX = (913, 2000)  # search panel: the level number box (tap -> a text field with OK)
-JOURNEY_GO = (607, 1392)  # side panel, at its bottom: Realm Journey's teal arrow button
 JOURNEY_PLUS = (936, 172)  # Realm Journey: the green "+" next to the supply counter (top right)
 JOURNEY_CLAIM = (0.65, 0.45, 0.92, 0.49)  # supply box: green "Claim" (grey "Next Supply" timer when not ready)
 JOURNEY_CLOSE = (540, 2050)  # supply box: "Tap any blank space to close"

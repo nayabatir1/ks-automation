@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from core.vision import Image
     from game import Kingshot
 
-TICK_X = 606  # the green tick at the right end of the Online Rewards row
+ROW_BUTTON_X = 606  # Daily tab: the button at the right end of each row (green tick or teal arrow)
 
 
 def no_reward_yet(app: Kingshot, log: Logger) -> datetime | timedelta:
@@ -62,6 +62,45 @@ def close_panel(phone: Phone) -> None:
 
 @job()
 def online_rewards(app: Kingshot, phone: Phone, log: Logger):
+    # 1-3. world map -> side panel -> Daily tab
+    open_daily_tab(app, phone, log)
+
+    # 4. "Online Rewards" (under My Rewards, at the top) is only listed while a chest is ready
+    m = phone.find(text="Online Rewards", region=SIDE_PANEL)
+    if not m:
+        close_panel(phone)
+        return no_reward_yet(app, log)
+    log.info("found Online Rewards at %s", m.center)
+
+    # 5. its green tick (right end of the row) claims the chest -> chest screen with "Next Chest Ready In: 01:47:56"
+    tick = (ROW_BUTTON_X, m.center[1] + 23)
+    hue = median_hue(phone.last_screen, (tick[0] - 35, tick[1] - 30, tick[0] + 35, tick[1] + 30))
+    if not 65 <= hue <= 86:  # green tick ~79; the teal arrow buttons ~92
+        raise RuntimeError(f"Online Rewards: no green tick at {tick} (hue {hue:.0f}); not tapping")
+    phone.tap_xy(*tick)
+    phone.wait_for(text="Next Chest Ready", region=CHEST_TIMER, timeout=10)
+    log.info("online reward claimed")
+
+    # 6. record when the next chest is ready, then tap a blank spot: that closes the chest screen and the panel
+    wait = None
+    for _ in range(8):  # the countdown is drawn a moment after "Next Chest Ready" shows
+        wait = phone.read_duration(region=CHEST_TIMER)
+        if wait is not None:
+            break
+        time.sleep(0.5)
+        phone.forget_screen()
+    if wait is None:
+        raise RuntimeError("could not read the 'Next Chest Ready In' countdown")
+    log.info("next chest in %s", wait)
+    phone.tap_xy(*BLANK_SPOT)
+    phone.wait_gone(text="Next Chest Ready", region=CHEST_TIMER, timeout=10)
+    close_panel(phone)  # usually already closed
+    return wait + timedelta(seconds=10)  # a little after it's ready
+
+
+def open_daily_tab(app: Kingshot, phone: Phone, log: Logger) -> None:
+    """World map -> side panel -> its Daily tab (Online Rewards, Realm Journey, Journey Supplies, ...).
+    Used by online_rewards and journey_supplies."""
     # 1. World button (Q4) -> world map; the button then reads "Town". Skip if already there.
     if phone.exists(text="Town", region=NAV_REGION):
         log.info("already on the world map")
@@ -94,38 +133,6 @@ def online_rewards(app: Kingshot, phone: Phone, log: Logger):
     else:
         raise ElementNotFound("the side panel's Daily tab didn't open")
     log.info("daily tab open")
-
-    # 4. "Online Rewards" (under My Rewards, at the top) is only listed while a chest is ready
-    m = phone.find(text="Online Rewards", region=SIDE_PANEL)
-    if not m:
-        close_panel(phone)
-        return no_reward_yet(app, log)
-    log.info("found Online Rewards at %s", m.center)
-
-    # 5. its green tick (right end of the row) claims the chest -> chest screen with "Next Chest Ready In: 01:47:56"
-    tick = (TICK_X, m.center[1] + 23)
-    hue = median_hue(phone.last_screen, (tick[0] - 35, tick[1] - 30, tick[0] + 35, tick[1] + 30))
-    if not 65 <= hue <= 86:  # green tick ~79; the teal arrow buttons ~92
-        raise RuntimeError(f"Online Rewards: no green tick at {tick} (hue {hue:.0f}); not tapping")
-    phone.tap_xy(*tick)
-    phone.wait_for(text="Next Chest Ready", region=CHEST_TIMER, timeout=10)
-    log.info("online reward claimed")
-
-    # 6. record when the next chest is ready, then tap a blank spot: that closes the chest screen and the panel
-    wait = None
-    for _ in range(8):  # the countdown is drawn a moment after "Next Chest Ready" shows
-        wait = phone.read_duration(region=CHEST_TIMER)
-        if wait is not None:
-            break
-        time.sleep(0.5)
-        phone.forget_screen()
-    if wait is None:
-        raise RuntimeError("could not read the 'Next Chest Ready In' countdown")
-    log.info("next chest in %s", wait)
-    phone.tap_xy(*BLANK_SPOT)
-    phone.wait_gone(text="Next Chest Ready", region=CHEST_TIMER, timeout=10)
-    close_panel(phone)  # usually already closed
-    return wait + timedelta(seconds=10)  # a little after it's ready
 
 
 def daily_tab_chosen(img: Image) -> bool:
