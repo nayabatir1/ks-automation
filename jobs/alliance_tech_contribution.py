@@ -6,11 +6,14 @@ open the game and close all pop-ups first.
 
 from __future__ import annotations
 
+import json
 import re
 import time
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
+import config
+from core import vision
 from core.task import job
 from core.vision import coloured_share, median_hue
 from regions import (
@@ -20,6 +23,11 @@ from regions import (
     CONTRIBUTE_RIGHT,
     NAV_Q4,
     Q4_TOP,
+    RANKING_BUTTON,
+    RANKING_DAILY_TAB,
+    RANKING_MY_ROW,
+    RANKING_TOP_ROW,
+    SCREEN_TITLE,
     TECH_BOX_TITLE,
     TECH_HEADER,
     TECH_STANDING,
@@ -29,8 +37,10 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from core.phone import Phone
+    from core.vision import Region
     from game import Kingshot
 
+RANKING_FILE = config.LOG_DIR / "alliance_ranking.json"  # rank 1's daily score at the last run
 POINTS_PER_ATTEMPT = 120  # before the bonus multiplier: 100, +20% on the alliance's preferred tech
 TAP_GAP = 0.4  # seconds between Contribute taps
 MAX_ROUNDS = 4  # rounds of taps per run, so it can never loop (normally 1: an attempt may refill meanwhile)
@@ -50,6 +60,8 @@ def alliance_tech_contribution(app: Kingshot, phone: Phone, log: Logger):
     )  # tech screen ("Your Ranking: 59"; OCR sometimes drops the g)
     score_before, rank_before = standing(phone)
     log.info("alliance tech screen open; contribution %s, ranking %s", show(score_before), show(rank_before))
+    _, daily_before = daily_scores(phone)
+    log.info("daily contribution before: me %s", show(daily_before))
 
     # 3. Covenant-Making node (bottom middle, between Q3 and Q4); matched by its castle art, not the 0/1 count
     phone.tap(image="covenant_making", region=BOTTOM_MID, timeout=10)
@@ -99,7 +111,22 @@ def alliance_tech_contribution(app: Kingshot, phone: Phone, log: Logger):
         gained = score - score_before
         log.info("gained %s from %d attempts (avg x%.2f)", f"{gained:,}", used, gained / (used * POINTS_PER_ATTEMPT))
 
-    # 6. All attempts are back exactly 250 min after they run out
+    # 6. the daily ranking again: my score now, and rank 1's (with its rise since the last run, kept in RANKING_FILE)
+    top, daily = daily_scores(phone)
+    try:
+        last_top = json.loads(RANKING_FILE.read_text()).get("top")
+    except (FileNotFoundError, ValueError):
+        last_top = None
+    log.info(
+        "daily contribution after: me %s%s; #1 %s%s",
+        show(daily),
+        rise(daily, daily_before),
+        show(top),
+        rise(top, last_top, "since the last run"),
+    )
+    RANKING_FILE.write_text(json.dumps({"top": top}))
+
+    # 7. All attempts are back exactly 250 min after they run out
     return timedelta(minutes=250)
 
 
@@ -114,6 +141,35 @@ def standing(phone: Phone) -> tuple[int | None, int | None]:
 
 def show(n: int | None) -> str:
     return f"{n:,}" if n is not None else "?"
+
+
+def daily_scores(phone: Phone) -> tuple[int | None, int | None]:
+    """Tech screen -> Ranking (top right) -> Contribution, Daily: (rank 1's score, my score), then back to the tech
+    screen. None for a score that doesn't read."""
+    phone.tap_xy(*RANKING_BUTTON)
+    phone.wait_for(text="Ranking", region=SCREEN_TITLE, timeout=10)
+    phone.tap_xy(*RANKING_DAILY_TAB)
+    time.sleep(1.5)
+    phone.forget_screen()
+    top, mine = row_score(phone, RANKING_TOP_ROW), row_score(phone, RANKING_MY_ROW)
+    phone.back()  # Alliance Ranking -> tech screen
+    phone.wait_for(text="Your Rank", region=TECH_HEADER, timeout=10)
+    return top, mine
+
+
+def row_score(phone: Phone, region: Region) -> int | None:
+    """The score at the right end of a ranking row (rank 1's row, or my row pinned at the bottom)."""
+    numbers = [m for m in vision.ocr_lines(phone.screen(region), region) if re.fullmatch(r"[\d,./]*\d", m.text.strip())]
+    score = max(numbers, key=lambda m: m.center[0], default=None)
+    return int(re.sub(r"\D", "", score.text)) if score else None
+
+
+def rise(now: int | None, before: int | None, since: str = "") -> str:
+    """ " (+1,320)" (or " (+1,320 since the last run)"); "" if either is unknown or the score went down (the
+    daily ranking was reset)."""
+    if now is None or before is None or now < before:
+        return ""
+    return f" (+{now - before:,}{' ' + since if since else ''})"
 
 
 def attempts_left(phone: Phone) -> int | None:
