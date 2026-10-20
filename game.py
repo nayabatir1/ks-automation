@@ -39,7 +39,6 @@ class Kingshot(Task):
     package: str = "com.run.tower.defense"
     jobs_package = "jobs"  # jobs/*.py, one file per job
     town_view = None  # town view position if known: (0, 0) right after a fresh launch
-    reuse_open_app = True  # game already open? use it (on_open checks the screen)
     timeout = 240  # per job
     open_timeout = 240  # launch + loading + pop-ups
     enabled = True
@@ -47,15 +46,6 @@ class Kingshot(Task):
     # ------------------------------------------------------------------ hooks (runner calls these)
     # launch -> on_open -> [before_job -> job] ... -> close app. Jobs start on the city screen.
     def on_open(self, phone: Phone, log: Logger) -> None:
-        if self.app_was_open:
-            try:  # already running: back out to the city / world map (closing any pop-up)
-                self.to_main_screen(phone, log)
-                self._just_opened = True
-                self.town_view = None  # the town view could be anywhere
-                return
-            except ElementNotFound:
-                log.info("game is open on a screen I don't know; restarting it")
-                phone.launch(self.package, self.activity)
         self.open_game(phone, log)
         self.close_popups(phone, log)
         self._just_opened = True
@@ -75,7 +65,6 @@ class Kingshot(Task):
         working out where an old view is). Returns the view."""
         if self.town_view is None:
             log.info("town view unknown: relaunching the game")
-            self.app_was_open = False
             phone.launch(self.package, self.activity)
             self.on_open(phone, log)
         self._just_opened = False

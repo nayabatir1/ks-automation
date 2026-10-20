@@ -93,10 +93,6 @@ class Task:
     close_app: bool = True
     # run.py --part: only these parts of a job made of parts (e.g. jobs/dailies.py); None = all of them.
     parts: list[str] | None = None
-    # If the app is already in the foreground, keep using it instead of restarting it.
-    # The runner sets self.app_was_open before on_open() so it can skip the loading screens.
-    reuse_open_app: bool = False
-    app_was_open: bool = False
     # Set by the runner before each job: the next run time that job had stored (None if never run).
     previous_next_at: datetime | None = None
     # @job tasks: after the due jobs, the app stays open only if the next job (any job, or the same one again)
@@ -138,7 +134,6 @@ class Task:
     def recover(self, phone: Phone, log: logging.Logger) -> None:
         """Called after a job fails, before the next job: get back to a known screen.
         Default: restart the app (which runs on_open again). Override if the app needs something smarter."""
-        self.app_was_open = False
         if self.package:
             phone.launch(self.package, self.activity)
         self.on_open(phone, log)

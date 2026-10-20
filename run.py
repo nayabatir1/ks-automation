@@ -171,11 +171,8 @@ def open_app(phone: Phone, task: Task, tlog: logging.Logger) -> None:
     phone.wake()  # again per task: a long previous task may have let the screen time out
     if config.DISABLE_KEYBOARDS:
         phone.disable_keyboards()
-    task.app_was_open = bool(task.package and task.reuse_open_app and phone.current_app() == task.package)
-    if task.app_was_open:
-        log.info("%s is already open; using it as it is", task.package)
-    elif task.package:
-        phone.launch(task.package, task.activity)
+    if task.package:
+        phone.launch(task.package, task.activity)  # always a fresh start, even if it's already open
     phone.start_input()  # get fast taps ready while the app loads
     task.on_open(phone, tlog)
 
