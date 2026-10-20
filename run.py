@@ -318,9 +318,12 @@ def run_batch(
             return next_time(j, result)
 
         status, error, nxt = call_with_timeout(timeout, work, key)
-        secs = time.monotonic() - t0
         if status != "ok" and check_session_taken(phone, task, name):
             return ok, True  # job state untouched: it runs again after the pause
+        if status == "error" and task.dismiss_blocker(phone, jlog):  # e.g. a new pop-up covered what it looked for
+            log.info("--- %s: a pop-up was in the way; closed it, running the job again", key)
+            status, error, nxt = call_with_timeout(timeout, work, key)
+        secs = time.monotonic() - t0
         if status != "ok":
             ok = False
             nxt = retry_at(j)

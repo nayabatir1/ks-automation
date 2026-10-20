@@ -10,6 +10,7 @@ Launch sequence seen on 2026-10-03 (fresh start, ~25 s total):
             !! these pop-ups have real-money buttons (e.g. "₹89.00") — never tap blindly !!
 """
 
+import re
 import time
 from logging import Logger
 from typing import Any
@@ -29,9 +30,12 @@ from regions import (
     POPUP_X_REGION,
     RESOURCE_PACK_ENTER,
     SESSION_TAKEN_TEXT,
+    TAP_TO_CLOSE_REGION,
     WELCOME_CONFIRM,
     WELCOME_TITLE,
 )
+
+TAP_TO_CLOSE = re.compile(r"Tap (to close|anywhere|any blank)", re.IGNORECASE)  # pop-ups closed by a tap
 
 
 class Kingshot(Task):
@@ -136,6 +140,14 @@ class Kingshot(Task):
         log.info("closed %d pop-up(s); on the city / world map", closed)
         return closed
 
+    def dismiss_blocker(self, phone: Phone, log: Logger) -> bool:
+        """After a job failed (something wasn't found): close one pop-up in the way, if there is one: an X (known, or
+        found by its shape), "Tap to close" / "Tap anywhere", Welcome back, Enter Game. True if one was closed."""
+        try:
+            return self._close_one_popup(phone, log, 0, 1, timeout=1)
+        except (ElementNotFound, RuntimeError):
+            return False
+
     def _close_one_popup(
         self,
         phone: Phone,
@@ -152,6 +164,7 @@ class Kingshot(Task):
             {"image": "close_x_orange", "region": POPUP_X_REGION},  # the same X on an orange sale pop-up
             {"text": "Welcome back", "region": WELCOME_TITLE},
             {"text": "Enter Game", "region": RESOURCE_PACK_ENTER},  # after an update (resource pack box)
+            {"text": TAP_TO_CLOSE, "region": TAP_TO_CLOSE_REGION},  # e.g. "Chief Minister" appointment
             also or {"text": "Backpack", "region": NAV_REGION},
         ]
         try:
@@ -164,7 +177,7 @@ class Kingshot(Task):
             phone.tap_xy(*xy)
             time.sleep(1.5)
             return True
-        if which == 4:
+        if which == 5:
             return False
         if closed >= max_popups:
             raise RuntimeError(f"still a pop-up after closing {max_popups}; something is off")
@@ -173,6 +186,11 @@ class Kingshot(Task):
             log.info("closing pop-up %d (X at %s, score %.2f)", closed + 1, m.center, m.score)
             phone.tap_xy(*m.center)
             self._wait_gone_quietly(phone, image=m.text, region=POPUP_X_REGION)
+        elif which == 4:
+            m = phone.last_match
+            log.info("closing pop-up %d (%r at %s)", closed + 1, m.text, m.center)
+            phone.tap_xy(*m.center)
+            self._wait_gone_quietly(phone, text=TAP_TO_CLOSE, region=TAP_TO_CLOSE_REGION)
         elif which == 3:  # "Resource pack downloading...": always Enter Game (the user's choice, not Download Now)
             log.info("pop-up %d: resource pack -> Enter Game", closed + 1)
             phone.tap_xy(*phone.last_match.center)

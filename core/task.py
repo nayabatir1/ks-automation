@@ -131,6 +131,11 @@ class Task:
         If True the runner closes the app, does NOT reconnect, and pauses (see core/pause.py)."""
         return False
 
+    def dismiss_blocker(self, phone: Phone, log: logging.Logger) -> bool:
+        """After a job failed: close one pop-up that may be in the way. True if one was closed (the job then runs
+        again at once). Default: nothing to close."""
+        return False
+
     def recover(self, phone: Phone, log: logging.Logger) -> None:
         """Called after a job fails, before the next job: get back to a known screen.
         Default: restart the app (which runs on_open again). Override if the app needs something smarter."""
