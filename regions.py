@@ -108,6 +108,7 @@ BANK_DAILY_BUTTON = (
     0.41,
     0.618,
 )  # Deals > Bank: the Daily 5% box's button (Withdraw / Deposit / In Deposit)
+BANK_DAILY_TIMER = (0.08, 0.42, 0.42, 0.45)  # Deals > Bank: the Daily 5% box's countdown (green bar above it)
 BANK_DIALOG_DEPOSIT = (
     0.5,
     0.65,

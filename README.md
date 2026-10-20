@@ -63,7 +63,7 @@ Nothing is lost when it's off: code, `state.json` and logs stay.
 | Job | When (IST) | What it does |
 |---|---|---|
 | troops_training | 5:35 am, 5:30 pm | Barracks → Train page → Barracks 950 / Stable 950 / Range 820 when idle |
-| dailies | 5:35 am | parts: gems, vip, deals (+ Bank), nomadic_merchant, cassie_recruit, truegold_crucible |
+| dailies | 5:35 am | parts: gems, vip, deals, nomadic_merchant, cassie_recruit, truegold_crucible |
 | collect_stamina | 5:35 am, 5:30 pm | Intel Mission → meat icon → Gourmet Feast when lit |
 | intel_mission | 5:35 am, 5:30 pm | claim ticked pins; tent Rescue, swords Conquer, bear/lion Attack (preset M1); never boss |
 | journey_supplies | 5:35 am, 5:30 pm | side panel → Daily tab → Realm Journey → "+" → free Claim |
@@ -73,6 +73,7 @@ Nothing is lost when it's off: code, `state.json` and logs stay.
 | recruit_heroes | on the game's timer | free Advanced / Epic recruit |
 | online_rewards | on the chest timer | side panel → Daily tab → Online Rewards green tick |
 | alliance_tech_contribution | every 250 min | Alliance → Tech → Covenant-Making → tap Contribute (bread) until 0 attempts |
+| bank | on the box's countdown | Deals → Bank → Daily 5% box: Withdraw when due, then Deposit the maximum |
 | voyage | every 8 h | Deals → Wavebound Voyage (if running) → Claim All → Dispatch All |
 | conquest | every 9 h | Conquest → idle income Claim |
 

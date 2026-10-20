@@ -21,8 +21,6 @@ from core.schedule import At
 from core.task import job, run_parts
 from jobs.online_rewards import ROW_BUTTON_X, open_daily_tab
 from regions import (
-    BANK_DAILY_BUTTON,
-    BANK_DIALOG_DEPOSIT,
     CRUCIBLE_REFINE,
     CRUCIBLE_REMAINING,
     CRUCIBLE_SUPER_X1,
@@ -120,42 +118,7 @@ def deals(app: Kingshot, phone: Phone, log: Logger):
             log.info("deals, %s: %d free reward(s) claimed", tab, claim_glowing(phone))
         else:
             log.info("deals: no %r tab", tab)
-    if open_tab(phone, "Bank"):
-        bank(phone, log)
     back_to_main(phone)
-
-
-def bank(phone: Phone, log: Logger) -> None:
-    """Deals > Bank, the Daily 5% box: Withdraw once its day is up (deposit + 5%), then deposit again (the dialog
-    starts at the maximum). "In Deposit" = still running. !! Never "TOP UP NOW" (real money) or the other boxes."""
-    time.sleep(1)
-    phone.forget_screen()
-    text = phone.read_text(BANK_DAILY_BUTTON)
-    if "Withdraw" in text:
-        phone.tap_xy(*button_centre(BANK_DAILY_BUTTON))
-        dismiss_popup(phone)  # Rewards: the gems back
-        log.info("bank: withdrew")
-        phone.forget_screen()
-        text = phone.read_text(BANK_DAILY_BUTTON)
-    if "In Deposit" in text:
-        log.info("bank: still in deposit")
-        return
-    if "Deposit" not in text:
-        log.info("bank: daily box shows %r; not touching it", text)
-        return
-    phone.tap_xy(*button_centre(BANK_DAILY_BUTTON))
-    m = phone.wait_for(text="Deposit", region=BANK_DIALOG_DEPOSIT, timeout=5)
-    button = (m.x - 120, m.y - 25, m.x + m.w + 120, m.y + m.h + 30)
-    if not 75 <= vision.median_hue(phone.last_screen, button) <= 105:
-        raise RuntimeError("the deposit dialog's Deposit button isn't teal; not tapping")
-    phone.tap_xy(*m.center)
-    time.sleep(1.5)
-    log.info("bank: deposited (the maximum)")
-
-
-def button_centre(region: Region) -> tuple[int, int]:
-    x1, y1, x2, y2 = region
-    return int((x1 + x2) / 2 * 1080), int((y1 + y2) / 2 * 2340)
 
 
 def nomadic_merchant(app: Kingshot, phone: Phone, log: Logger):
@@ -413,6 +376,7 @@ def open_tab(phone: Phone, name: str) -> bool:
     for _ in range(4):  # back to the start of the row
         if not swipe_tabs(phone, TAB_SWIPE[1], TAB_SWIPE[0]):
             break
+    stuck = 0
     for _ in range(MAX_TAB_PAGES * 2):
         m = phone.find(text=name, region=TAB_NAMES)
         if m:
@@ -420,8 +384,12 @@ def open_tab(phone: Phone, name: str) -> bool:
             time.sleep(1)
             phone.forget_screen()
             return True
-        if not swipe_tabs(phone, *SEARCH_SWIPE):  # short steps: a tab cut off at the edge can't be read
-            return False
+        if swipe_tabs(phone, *SEARCH_SWIPE):  # short steps: a tab cut off at the edge can't be read
+            stuck = 0
+        else:
+            stuck += 1
+            if stuck == 2:  # twice: at the end of the row (once can be a swipe lost while the page settles)
+                return False
     return False
 
 
