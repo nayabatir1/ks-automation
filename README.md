@@ -69,7 +69,7 @@ Nothing is lost when it's off: code, `state.json` and logs stay.
 | journey_supplies | 5:35 am, 5:30 pm | side panel → Daily tab → Realm Journey → "+" → free Claim |
 | claim_rewards | 5:35 am, 5:30 pm | parts: mail_rewards, alliance_rewards (chests + big chest), help_members |
 | arena | 5:25 am | parts: pan_extra_intel_mission, arena (fights until attempts are 0) |
-| farming | every 7.5 h | Bread, Wood, Stone, Iron: Lv.8 tile → Gather (heroes 2 and 3 removed) → Deploy |
+| farming | every 7.5 h | Bread, Wood, Stone, Iron: highest-level tile (+ grey) → Gather (heroes 2 and 3 removed) → Deploy |
 | recruit_heroes | on the game's timer | free Advanced / Epic recruit |
 | online_rewards | on the chest timer | side panel → Daily tab → Online Rewards green tick |
 | alliance_tech_contribution | every 250 min | Alliance → Tech → Covenant-Making → tap Contribute (bread) until 0 attempts |

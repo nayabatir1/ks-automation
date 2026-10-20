@@ -1,7 +1,8 @@
 """Kingshot job: farming. Every 7.5 h.
 
 World map -> magnifying glass (bottom left) -> search panel; for Bread, Wood, Stone and Iron: pick it in the row,
-check "Lv.8" and the "Only search for full Resources" tick -> Search -> Gather -> remove heroes 3 and 2 -> Deploy.
+the highest level (the "+" by the slider is grey; held until it is) and the "Only search for full Resources"
+tick -> Search -> Gather -> remove heroes 3 and 2 -> Deploy.
 "Other Troops are marching toward the same target" -> Cancel, search again. Troops aren't waited for.
 Starts on the city screen or world map; after_job backs out to where it started.
 """
@@ -27,8 +28,8 @@ from regions import (
     SCREEN_TITLE,
     SEARCH_BUTTON,
     SEARCH_GO,
-    SEARCH_LEVEL_BOX,
     SEARCH_LEVEL_LABEL,
+    SEARCH_LEVEL_PLUS,
     SEARCH_ROW,
     SEARCH_TICK,
     TILE_GATHER,
@@ -42,8 +43,6 @@ if TYPE_CHECKING:
     from game import Kingshot
 
 RESOURCES = ("Bread", "Wood", "Stone", "Iron")
-LEVEL = 8  # 8 is the slider's top, so "Lv.8" always shows in one spot
-FIELD_OK = (942, 2125)  # OK of the text field the number box opens
 SEARCH_PANEL_GO = (0.2, 0.9, 0.8, 0.99)  # the search panel's "Search" button (the panel is open)
 DEPLOY_TAP = (822, 2240)
 
@@ -81,11 +80,8 @@ def gather(phone: Phone, log: Logger, kind: str, tries: int = 3) -> None:
             raise ElementNotFound(f"{kind} isn't in the search row")
         phone.tap_xy(m.center[0], m.center[1] - 60)  # the tile picture above its name
         time.sleep(1.2)
-        set_level(phone, LEVEL)  # each resource keeps its own level: always set it
-        phone.forget_screen()
-        level = level_label(phone.screen())
-        if level != LEVEL:
-            raise RuntimeError(f"{kind}: the search level reads {level}, not {LEVEL}; not searching")
+        max_level(phone, log, kind)  # each resource keeps its own level: always check it
+        log.info("%s: searching at Lv.%s (the highest)", kind, level_label(phone.last_screen) or "?")
         if vision.coloured_share(phone.last_screen, SEARCH_TICK) < 0.1:
             raise RuntimeError(f"{kind}: 'Only search for full Resources' isn't ticked; not searching")
         phone.tap_xy(*SEARCH_GO)
@@ -125,16 +121,17 @@ def swipe_row_to_end(phone: Phone) -> None:
             return
 
 
-def set_level(phone: Phone, level: int) -> None:
-    """Type the level into the search panel's number box (a text field with OK opens)."""
-    phone.tap_xy(*SEARCH_LEVEL_BOX)
-    time.sleep(1)
-    phone.key("KEYCODE_MOVE_END")
-    for _ in range(3):
-        phone.key("KEYCODE_DEL")
-    phone.type_text(str(level))
-    phone.tap_xy(*FIELD_OK)
-    time.sleep(1)
+def max_level(phone: Phone, log: Logger, kind: str) -> None:
+    """The highest search level: the "+" right of the slider is grey there. Teal: hold it until it's grey."""
+    for _ in range(4):
+        phone.forget_screen()
+        if vision.coloured_share(phone.screen(), SEARCH_LEVEL_PLUS) < 0.2:
+            return
+        log.info("%s: not at the highest level yet; holding +", kind)
+        x1, y1, x2, y2 = SEARCH_LEVEL_PLUS
+        phone.hold_xy((x1 + x2) // 2, (y1 + y2) // 2, seconds=3)
+        time.sleep(0.5)
+    raise RuntimeError(f"{kind}: the level's + button is still not grey; not searching")
 
 
 def level_label(img: Image) -> int | None:
