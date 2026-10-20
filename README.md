@@ -66,13 +66,14 @@ Nothing is lost when it's off: code, `state.json` and logs stay.
 | dailies | 5:35 am | parts: gems, vip, deals (+ Bank), nomadic_merchant, cassie_recruit, truegold_crucible |
 | collect_stamina | 5:35 am, 5:30 pm | Intel Mission → meat icon → Gourmet Feast when lit |
 | intel_mission | 5:35 am, 5:30 pm | claim ticked pins; tent Rescue, swords Conquer, bear/lion Attack (preset M1); never boss |
-| journey_supplies | 5:35 am, 5:30 pm | side panel → Realm Journey → "+" → free Claim |
+| journey_supplies | 5:35 am, 5:30 pm | side panel → Daily tab → Realm Journey → "+" → free Claim |
 | claim_rewards | 5:35 am, 5:30 pm | parts: mail_rewards, alliance_rewards (chests + big chest), help_members |
 | arena | 5:25 am | parts: pan_extra_intel_mission, arena (fights until attempts are 0) |
 | farming | every 7.5 h | Bread, Wood, Stone, Iron: Lv.8 tile → Gather (heroes 2 and 3 removed) → Deploy |
 | recruit_heroes | on the game's timer | free Advanced / Epic recruit |
-| online_rewards | on the chest timer | side panel → Online Rewards chest |
-| alliance_tech_contribution | every 250 min | Alliance → Tech → hold Contribute |
+| online_rewards | on the chest timer | side panel → Daily tab → Online Rewards green tick |
+| alliance_tech_contribution | every 250 min | Alliance → Tech → Covenant-Making → tap Contribute (bread) until 0 attempts |
+| voyage | every 8 h | Deals → Wavebound Voyage (if running) → Claim All → Dispatch All |
 | conquest | every 9 h | Conquest → idle income Claim |
 
 Jobs due at the same time share one game launch and run in **priority** order (lower first):
