@@ -31,7 +31,9 @@ if TYPE_CHECKING:
     from core.phone import Phone
     from game import Kingshot
 
-MAX_HOLDS = 6  # per run, so it can never loop (one 5 s hold used all 24 attempts on 2026-10-20)
+POINTS_PER_ATTEMPT = 120  # before the bonus multiplier: 100, +20% on the alliance's preferred tech
+TAP_GAP = 0.4  # seconds between Contribute taps
+MAX_ROUNDS = 4  # rounds of taps per run, so it can never loop (normally 1: an attempt may refill meanwhile)
 
 
 @job()
@@ -46,22 +48,24 @@ def alliance_tech_contribution(app: Kingshot, phone: Phone, log: Logger):
     phone.wait_for(
         text="Your Rank", region=TECH_HEADER, timeout=10
     )  # tech screen ("Your Ranking: 59"; OCR sometimes drops the g)
-    log.info("alliance tech screen open; %s", standing(phone))
+    score_before, rank_before = standing(phone)
+    log.info("alliance tech screen open; contribution %s, ranking %s", show(score_before), show(rank_before))
 
     # 3. Covenant-Making node (bottom middle, between Q3 and Q4); matched by its castle art, not the 0/1 count
     phone.tap(image="covenant_making", region=BOTTOM_MID, timeout=10)
     phone.wait_for(text="Covenant-Making", region=TECH_BOX_TITLE, timeout=10)
     log.info("contribution box open")
 
-    # 4. Hold the RIGHT Contribute button (teal, costs bread, "Attempts: 25/25") until the attempts are 0: one hold
-    #    may not use them all. !! The LEFT Contribute button (orange) spends GEMS and looks the same in grey, so:
-    #    search only the right half of the box, and check the button really is teal before touching it.
+    # 4. Tap the RIGHT Contribute button (teal, costs bread, "Attempts: 25/25") once per attempt, TAP_GAP apart,
+    #    until the attempts are 0. It is tapped exactly as many times as the attempts read (never on a grey
+    #    button). !! The LEFT Contribute button (orange) spends GEMS and looks the same in grey, so: search only the
+    #    right half of the box, and check the button really is teal before each round of taps.
     m = phone.wait_for(image="contribute_label", region=CONTRIBUTE_RIGHT, timeout=10)
     button = (m.x - 40, m.y - 6, m.x + m.w + 40, m.y + m.h + 70)  # whole button around its label
     cx, cy = (button[0] + button[2]) // 2, (button[1] + button[3]) // 2
-    left = attempts_left(phone)
+    left = first_left = attempts_left(phone)
     log.info("attempts left: %s", left if left is not None else "unreadable")
-    for _ in range(MAX_HOLDS):
+    for _ in range(MAX_ROUNDS):
         if left == 0:
             break
         img = phone.screen()
@@ -71,35 +75,45 @@ def alliance_tech_contribution(app: Kingshot, phone: Phone, log: Logger):
         hue = median_hue(img, button)
         if not 75 <= hue <= 105:
             raise RuntimeError(f"right Contribute button isn't teal (hue {hue:.0f}); not touching it")
-        phone.hold_xy(cx, cy, seconds=5)
+        taps = left if left is not None else 1  # attempts unreadable: one tap, then read again
+        for _ in range(taps):
+            phone.tap_xy(cx, cy, pause=TAP_GAP)
         time.sleep(1)
         phone.forget_screen()
         before, left = left, attempts_left(phone)
-        log.info("held Contribute (bread) for 5 s: attempts %s -> %s", before, left)
+        log.info("tapped Contribute (bread) %d time(s): attempts %s -> %s", taps, before, left)
         if left is not None and before is not None and left >= before:
             raise RuntimeError(f"attempts didn't go down ({before} -> {left}); stopping")
     else:
-        log.warning("attempts still %s after %d holds", left, MAX_HOLDS)
+        log.warning("attempts still %s after %d rounds of taps", left, MAX_ROUNDS)
 
     # 5. close the box (Back) and read the new contribution and ranking on the tech screen
     phone.back()
     phone.wait_for(text="Your Rank", region=TECH_HEADER, timeout=10)
     time.sleep(1)
     phone.forget_screen()
-    log.info("after contributing: %s", standing(phone))
+    score, rank = standing(phone)
+    log.info("after contributing: contribution %s, ranking %s", show(score), show(rank))
+    used = first_left - left if first_left is not None and left is not None else None
+    if used and score is not None and score_before is not None and score >= score_before:
+        gained = score - score_before
+        log.info("gained %s from %d attempts (avg x%.2f)", f"{gained:,}", used, gained / (used * POINTS_PER_ATTEMPT))
 
     # 6. All attempts are back exactly 250 min after they run out
     return timedelta(minutes=250)
 
 
-def standing(phone: Phone) -> str:
-    """ "contribution 39,720, ranking 19" from the tech screen's top-right box ("Your Contribution: 39,720",
-    "Your Ranking: 19"); "?" for a number that doesn't read."""
+def standing(phone: Phone) -> tuple[int | None, int | None]:
+    """(contribution, ranking) from the tech screen's top-right box ("Your Contribution: 39,720",
+    "Your Ranking: 19"); None for a number that doesn't read."""
     text = phone.read_text(TECH_STANDING)
     score = re.search(r"Contribution\W*(\d[\d,./ ]*\d|\d)", text)  # OCR reads the comma as "," "." or "/"
     rank = re.search(r"Ranki?n?g?\W*(\d+)", text)
-    points = f"{int(re.sub(r'\D', '', score.group(1))):,}" if score else "?"
-    return f"contribution {points}, ranking {rank.group(1) if rank else '?'}"
+    return (int(re.sub(r"\D", "", score.group(1))) if score else None, int(rank.group(1)) if rank else None)
+
+
+def show(n: int | None) -> str:
+    return f"{n:,}" if n is not None else "?"
 
 
 def attempts_left(phone: Phone) -> int | None:
