@@ -19,6 +19,7 @@ from core import vision
 from core.phone import ElementNotFound
 from core.schedule import At
 from core.task import job, run_parts
+from jobs.online_rewards import ROW_BUTTON_X, open_daily_tab
 from regions import (
     BANK_DAILY_BUTTON,
     BANK_DIALOG_DEPOSIT,
@@ -28,7 +29,6 @@ from regions import (
     DEALS_LABEL,
     FREE_COLUMN,
     GEMS_SHOP,
-    LEFT_MID,
     MERCHANT_BUY_BUTTON,
     MERCHANT_BUY_ITEM,
     MERCHANT_PRICES,
@@ -275,14 +275,15 @@ def cassie_recruit(app: Kingshot, phone: Phone, log: Logger):
 
 
 def truegold_crucible(app: Kingshot, phone: Phone, log: Logger):
-    """World map -> side panel (">" tab, left middle) -> scroll to "Truegold Crucible" -> Truegold Crucible screen."""
-    if phone.exists(text="World", region=NAV_REGION):  # on the town: the button names the world map
-        phone.tap(text="World", region=NAV_REGION)
-        phone.wait_for(text="Town", region=NAV_REGION, timeout=15)
-    phone.tap(image="side_tab", region=LEFT_MID, timeout=10)
-    phone.wait_for(text="Wilderness", region=SIDE_PANEL, timeout=10)
+    """World map -> side panel -> Daily tab -> scroll down to "Truegold Crucible" -> its arrow -> Truegold Crucible."""
+    open_daily_tab(app, phone, log)
     m = phone.scroll_to(text="Truegold Crucible", region=SIDE_PANEL, max_swipes=10)
-    phone.tap_xy(*m.center)
+    arrow = (ROW_BUTTON_X, m.center[1] + 23)
+    box = (arrow[0] - 35, arrow[1] - 30, arrow[0] + 35, arrow[1] + 30)
+    hue = vision.median_hue(phone.last_screen, box)
+    if not 70 <= hue <= 100:  # its green / teal arrow
+        raise RuntimeError(f"Truegold Crucible: no arrow at {arrow} (hue {hue:.0f}); not tapping")
+    phone.tap_xy(*arrow)
     phone.wait_for(text="Remaining today", region=CRUCIBLE_REMAINING, timeout=10)
     log.info("truegold crucible open")
     # Refine until "Remaining today: 0" (7 a day; each costs more resources, instant, no pop-up)
