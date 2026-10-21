@@ -17,6 +17,7 @@ NAV_Q4 = (0.5, 0.95, 1, 1)  # ...its Q4 half: Shop Alliance World/Town
 NAV_Q3 = (0, 0.95, 0.5, 1)  # ...its Q3 half: Conquest Heroes Backpack
 LEFT_MID = (0, 0.33, 0.25, 0.67)  # left edge, middle third of the height
 SIDE_PANEL = (0, 0.25, 0.65, 0.7)  # the panel the side tab opens (left side)
+SIDE_PANEL_WILDERNESS_TAB = (337, 671)  # side panel: the "Wilderness" tab (middle; March Queue)
 SIDE_PANEL_DAILY_TAB = (553, 669)  # side panel: the "Daily" tab (right of Town / Wilderness)
 PANEL_TAB = (0.5, 0.38, 0.8, 0.56)  # the open panel's "<" tab (right edge of the panel)
 CHEST_TIMER = (0.2, 0.78, 0.8, 0.88)  # online rewards: "Next Chest Ready In:" + countdown
@@ -144,6 +145,23 @@ SEARCH_GO = (540, 2240)  # search panel: teal "Search"
 TILE_GATHER = (0.3, 0.48, 0.7, 0.53)  # found tile box: teal "Gather" (the "+" by Gathering Speed opens boosts: never)
 HERO_MINUS = {2: (641, 586), 3: (925, 586)}  # formation page: the orange "-" of hero cards 2 and 3
 SAME_TARGET_CANCEL = (0.05, 0.58, 0.5, 0.66)  # "Other Troops are marching toward the same target": orange Cancel
+MARCH_QUEUE = (0.05, 0.3, 0.55, 0.64)  # side panel > Wilderness: "March Queue" and its 6 rows
+QUEUE_ROW_Y = 790  # ...first row starts here (pixels); one row every QUEUE_ROW_STEP
+QUEUE_ROW_STEP = 110
+MARCHING_TITLE = (0.05, 0.17, 0.2, 0.2)  # world map: the word "Marching" (no list = no march out)
+MARCHING_COUNT = (290, 410, 385, 460)  # world map: "N/6" of "Marching N/6" (left, under the profile; pixels)
+MARCH_ROW_Y = 515  # ...first march row's centre y; each next row MARCH_ROW_STEP lower
+MARCH_ROW_STEP = 90
+MARCH_BADGE = (55, 8, 85, 32)  # ...a row's icon corner (x1, dy1, x2, dy2 from the row's y): white badge = secured
+MARCH_RECALL_X = 328  # ...the row's teal return arrow (recall; "Returning" rows show a speed-up there: never)
+RECALL_CONFIRM = (0.5, 0.58, 0.92, 0.66)  # "Recall squad?" box: teal Confirm (Cancel is left)
+AUTO_JOIN_FLAG = (975, 2200)  # search panel with Terror chosen: the "Auto Join" flag, bottom right
+AUTO_JOIN_TITLE = (0.25, 0.18, 0.75, 0.23)  # Auto-Join pop-up: its title
+AUTO_JOIN_STOP = (110, 1860, 440, 1950)  # ...left button: orange "Stop" while it runs, grey when stopped
+AUTO_JOIN_ENABLE = (540, 1860, 960, 1950)  # ...right button: teal "Enable" (stopped) / "Restart" (running)
+AUTO_JOIN_MINUS = (115, 1120, 185, 1185)  # ...Queue Limit "-"
+AUTO_JOIN_TRACK = (260, 1140, 650, 1165)  # ...Queue Limit slider track: green fill grows with the limit (1 = none)
+AUTO_JOIN_CLOSE = (1000, 486)  # ...its X (top right)
 SEARCH_LEVEL_PLUS = (695, 1965, 765, 2035)  # search panel: the "+" right of the level slider (grey at the top level)
 JOURNEY_PLUS = (936, 172)  # Realm Journey: the green "+" next to the supply counter (top right)
 JOURNEY_CLAIM = (0.65, 0.45, 0.92, 0.49)  # supply box: green "Claim" (grey "Next Supply" timer when not ready)
