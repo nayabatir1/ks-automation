@@ -31,6 +31,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import config
+from core import switches
 
 if TYPE_CHECKING:
     from core.phone import Phone
@@ -93,6 +94,8 @@ class Task:
     close_app: bool = True
     # run.py --part: only these parts of a job made of parts (e.g. jobs/dailies.py); None = all of them.
     parts: list[str] | None = None
+    # Set by the runner before each job: its name (jobs.toml switches its parts on / off).
+    current_job: str = ""
     # Set by the runner before each job: the next run time that job had stored (None if never run).
     previous_next_at: datetime | None = None
     # @job tasks: after the due jobs, the app stays open only if the next job (any job, or the same one again)
@@ -162,7 +165,11 @@ class Task:
                     raise RuntimeError(f"{cls.__name__}: job '{name}' is defined twice")
                 funcs[name] = fn
             cls._jobs = sorted(
-                (Job(name=n, func=f, **f._job) for n, f in funcs.items()), key=lambda j: (j.priority, j.name)
+                (
+                    Job(name=n, func=f, **{**f._job, "enabled": f._job["enabled"] and switches.job_on(n)})
+                    for n, f in funcs.items()
+                ),
+                key=lambda j: (j.priority, j.name),
             )
         return cls._jobs
 
@@ -199,6 +206,10 @@ def run_parts(app: Task, phone: Phone, log: logging.Logger, parts: dict[str, Cal
     if unknown:
         raise ValueError(f"no part {', '.join(sorted(unknown))}; parts: {', '.join(parts)}")
     for name, part in parts.items():
-        if app.parts is None or name in app.parts:
-            log.info("part: %s", name)
-            part(app, phone, log)
+        if app.parts is not None and name not in app.parts:
+            continue
+        if app.parts is None and not switches.part_on(app.current_job, name):
+            log.info("part: %s (off in jobs.toml)", name)
+            continue
+        log.info("part: %s", name)
+        part(app, phone, log)

@@ -310,6 +310,7 @@ def run_batch(
         log.info("--- %s: start (timeout %ss)", key, timeout)
 
         task.previous_next_at = state.next_at(key)
+        task.current_job = j.name
 
         def work(j=j, jlog=jlog):
             task.before_job(phone, jlog)

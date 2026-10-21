@@ -17,7 +17,7 @@ import numpy as np
 import pytesseract
 
 import config
-from core import vision
+from core import switches, vision
 from core.phone import ElementNotFound
 from core.schedule import At, utcnow
 from core.task import job
@@ -90,6 +90,9 @@ def dailies(app: Kingshot, phone: Phone, log: Logger):
             continue
         if app.parts is None and name in done:
             log.info("part: %s (already done today)", name)
+            continue
+        if app.parts is None and not switches.part_on("dailies", name):
+            log.info("part: %s (off in jobs.toml)", name)
             continue
         log.info("part: %s", name)
         try:

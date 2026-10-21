@@ -48,6 +48,20 @@ adb shell am force-stop com.run.tower.defense   # close the game
 rm -f .runner.lock                              # only if a later run says "Another run is still in progress"
 ```
 
+Switch one job or one part off (or on again): edit `jobs.toml`, `true` = on, `false` = off. It's read on every
+run, so the change counts from the next minute; no restart. Anything not listed there is on.
+
+```toml
+[jobs]
+voyage = false              # this job doesn't run
+
+[parts.dailies]
+nomadic_merchant = false    # dailies skips this part
+```
+
+`run.py --timeline` then leaves it out, and `--list` shows it as "no". `run.py --job` / `--part` still run it when
+you ask for it (for testing).
+
 Turn the automation off for good / back on (needs sudo):
 
 ```bash
