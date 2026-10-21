@@ -7,6 +7,7 @@ The Q1 icons (gems, VIP, Events, Deals, Sign-in, ...) show on both the town and 
 
 from __future__ import annotations
 
+import json
 import re
 import time
 from typing import TYPE_CHECKING
@@ -15,10 +16,11 @@ import cv2
 import numpy as np
 import pytesseract
 
+import config
 from core import vision
 from core.phone import ElementNotFound
-from core.schedule import At
-from core.task import job, run_parts
+from core.schedule import At, utcnow
+from core.task import job
 from jobs.online_rewards import ROW_BUTTON_X, open_daily_tab
 from regions import (
     CRUCIBLE_REFINE,
@@ -70,8 +72,37 @@ BLANK_SPOT_PX = (540, 300)  # dim area above reward pop-ups (no buttons behind i
 @job(schedule=At("00:05", tz="UTC"), priority=100, timeout=1800)  # 5:35am IST, after troops_training; merchant ~12 min
 def dailies(app: Kingshot, phone: Phone, log: Logger):
     """The parts below, in order; each starts and ends on the city / world map.
-    Test one part: run.py --job dailies --part vip   (several: --part gems,deals; all: leave --part out)"""
-    run_parts(app, phone, log, PARTS)
+    Test one part: run.py --job dailies --part vip   (several: --part gems,deals; all: leave --part out)
+    A part that fails doesn't stop the others. The parts done today (UTC) are kept in DONE_FILE, so a retry runs
+    only the rest: e.g. the merchant (it buys VIP XP with gems) never runs twice a day."""
+    unknown = set(app.parts or ()) - set(PARTS)
+    if unknown:
+        raise ValueError(f"no part {', '.join(sorted(unknown))}; parts: {', '.join(PARTS)}")
+    today = utcnow().date().isoformat()
+    try:
+        saved = json.loads(DONE_FILE.read_text())
+        done = saved["done"] if saved.get("date") == today else []
+    except (FileNotFoundError, ValueError, KeyError):
+        done = []
+    failed = []
+    for name, part in PARTS.items():
+        if app.parts is not None and name not in app.parts:
+            continue
+        if app.parts is None and name in done:
+            log.info("part: %s (already done today)", name)
+            continue
+        log.info("part: %s", name)
+        try:
+            part(app, phone, log)
+        except (ElementNotFound, RuntimeError) as e:  # the other parts still run; the retry does only this one
+            log.warning("part %s failed: %s", name, e)
+            failed.append(name)
+            app.to_main_screen(phone, log)
+            continue
+        done.append(name)
+        DONE_FILE.write_text(json.dumps({"date": today, "done": done}))
+    if failed:
+        raise RuntimeError(f"part(s) failed: {', '.join(failed)}; the retry runs only the parts not done today")
 
 
 def gems(app: Kingshot, phone: Phone, log: Logger):
@@ -278,6 +309,7 @@ def refines_left(phone: Phone, tries: int = 3) -> int | None:
     return None
 
 
+DONE_FILE = config.LOG_DIR / "dailies.json"  # the parts done today (UTC): a retry skips them
 PARTS = {
     "gems": gems,
     "vip": vip,
