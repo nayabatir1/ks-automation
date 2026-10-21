@@ -107,6 +107,7 @@ def alliance_tech_contribution(app: Kingshot, phone: Phone, log: Logger):
     score, rank = standing(phone)
     log.info("after contributing: contribution %s, ranking %s", show(score), show(rank))
     used = first_left - left if first_left is not None and left is not None else None
+    gained_total = score - score_before if score is not None and score_before is not None else None
     if used and score is not None and score_before is not None and score >= score_before:
         gained = score - score_before
         log.info("gained %s from %d attempts (avg x%.2f)", f"{gained:,}", used, gained / (used * POINTS_PER_ATTEMPT))
@@ -124,6 +125,18 @@ def alliance_tech_contribution(app: Kingshot, phone: Phone, log: Logger):
         show(top),
         rise(top, last_top, "since the last run"),
     )
+    if (
+        gained_total is not None
+        and daily is not None
+        and daily_before is not None
+        and daily - daily_before != gained_total
+    ):
+        log.warning(
+            "daily contribution doesn't add up: %s -> %s, but the total rose by %s",
+            show(daily_before),
+            show(daily),
+            show(gained_total),
+        )
     RANKING_FILE.write_text(json.dumps({"top": top}))
 
     # 7. All attempts are back exactly 250 min after they run out
@@ -150,11 +163,24 @@ def daily_scores(phone: Phone) -> tuple[int | None, int | None]:
     phone.wait_for(text="Ranking", region=SCREEN_TITLE, timeout=10)
     phone.tap_xy(*RANKING_DAILY_TAB)
     time.sleep(1.5)
-    phone.forget_screen()
-    top, mine = row_score(phone, RANKING_TOP_ROW), row_score(phone, RANKING_MY_ROW)
+    top, mine = steady_score(phone, RANKING_TOP_ROW), steady_score(phone, RANKING_MY_ROW)
     phone.back()  # Alliance Ranking -> tech screen
     phone.wait_for(text="Your Rank", region=TECH_HEADER, timeout=10)
     return top, mine
+
+
+def steady_score(phone: Phone, region: Region, tries: int = 6) -> int | None:
+    """A row's score once two readings in a row agree: right after the Daily tab opens the list is still loading
+    or moving, and a single reading can be wrong ("65" for 0). None if it never settles."""
+    last = None
+    for _ in range(tries):
+        phone.forget_screen()
+        now = row_score(phone, region)
+        if now is not None and now == last:
+            return now
+        last = now
+        time.sleep(0.7)
+    return None
 
 
 def row_score(phone: Phone, region: Region) -> int | None:
