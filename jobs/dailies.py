@@ -21,7 +21,7 @@ from core import vision
 from core.phone import ElementNotFound
 from core.schedule import At, utcnow
 from core.task import job
-from jobs.online_rewards import ROW_BUTTON_X, open_daily_tab
+from jobs.online_rewards import ROW_BUTTON_X, close_panel, open_daily_tab
 from regions import (
     CRUCIBLE_REFINE,
     CRUCIBLE_REMAINING,
@@ -182,9 +182,8 @@ def nomadic_merchant(app: Kingshot, phone: Phone, log: Logger):
                     time.sleep(0.3)
                 elif price_bar(now, xy) and vip_xp(now, xy):
                     bought += buy_vip_xp(phone, log, xy)
-            if round_no % 5 == 4 and not phone.exists(text="Refreshes in", region=MERCHANT_TIMER, timeout=3):
-                log.info("merchant: the merchant screen is gone (not enough resources?); stopping")
-                phone.back()
+            if round_no % 5 == 4 and not merchant_still_open(phone, log):
+                log.info("merchant: the merchant screen is gone; stopping")
                 break
             continue
         if not all(price_bar(img, xy) for xy in MERCHANT_PRICES):
@@ -198,6 +197,24 @@ def nomadic_merchant(app: Kingshot, phone: Phone, log: Logger):
         time.sleep(1)
     log.info("merchant: %d box(es) bought, %d free refresh(es)", bought, refreshes)
     back_to_main(phone)
+
+
+def merchant_still_open(phone: Phone, log: Logger) -> bool:
+    """The merchant screen is still showing ("Refreshes in"). A fast tap can land on a box that just changed and open
+    its buy dialog over the merchant: Back closes that, then it's checked again. Still gone: a screenshot goes to
+    logs/failures/ to see what it was, and False."""
+    if phone.exists(text="Refreshes in", region=MERCHANT_TIMER, timeout=3):
+        return True
+    phone.back()  # a dialog over the merchant (Back on the merchant itself leaves it: then it's gone either way)
+    time.sleep(1.5)
+    if phone.exists(text="Refreshes in", region=MERCHANT_TIMER, timeout=3):
+        log.info("merchant: closed something that covered it; carrying on")
+        return True
+    shot = config.FAILURE_DIR / f"merchant_gone_{utcnow():%Y%m%d-%H%M%S}.png"
+    shot.parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(shot), phone.screen())
+    log.info("merchant: screen gone; screenshot %s", shot)
+    return False
 
 
 def buy_vip_xp(phone: Phone, log: Logger, xy: tuple[int, int]) -> int:
@@ -269,9 +286,19 @@ def cassie_recruit(app: Kingshot, phone: Phone, log: Logger):
 
 
 def truegold_crucible(app: Kingshot, phone: Phone, log: Logger):
-    """World map -> side panel -> Daily tab -> scroll down to "Truegold Crucible" -> its arrow -> Truegold Crucible."""
+    """World map -> side panel -> Daily tab -> scroll down to "Truegold Crucible" -> its arrow -> Truegold Crucible.
+    The Daily tab hides a row once its task is done ("Hide after mission completion"): no row = done today."""
     open_daily_tab(app, phone, log)
-    m = phone.scroll_to(text="Truegold Crucible", region=SIDE_PANEL, max_swipes=10)
+    try:
+        m = phone.scroll_to(text="Truegold Crucible", region=SIDE_PANEL, max_swipes=10)
+    except ElementNotFound:
+        log.info("crucible: not in the Daily list (it's hidden once done today); nothing to do")
+        close_panel(phone)
+        return
+    if m.center[1] > PANEL_LOW_Y:  # at the panel's bottom edge its arrow is cut off: scroll it up a bit
+        phone.swipe(m.center[0], m.center[1], m.center[0], m.center[1] - 400, ms=500)
+        time.sleep(1)
+        m = phone.wait_for(text="Truegold Crucible", region=SIDE_PANEL, timeout=5)
     arrow = (ROW_BUTTON_X, m.center[1] + 23)
     box = (arrow[0] - 35, arrow[1] - 30, arrow[0] + 35, arrow[1] + 30)
     hue = vision.median_hue(phone.last_screen, box)
@@ -309,6 +336,7 @@ def refines_left(phone: Phone, tries: int = 3) -> int | None:
     return None
 
 
+PANEL_LOW_Y = 1300  # side panel: a row below this is too close to its bottom edge to tap its button
 DONE_FILE = config.LOG_DIR / "dailies.json"  # the parts done today (UTC): a retry skips them
 PARTS = {
     "gems": gems,
