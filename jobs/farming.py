@@ -153,23 +153,8 @@ def open_search_panel(app: Kingshot, phone: Phone, log: Logger) -> None:
 def set_queue_limit(app: Kingshot, phone: Phone, log: Logger) -> None:
     """Search panel -> Terror -> Auto Join (flag, bottom right): Stop it if it runs (orange Stop), hold "-" until the
     Queue Limit is 1 (the slider's track has no green fill), Enable (a fresh 8 h), close the pop-up."""
-    open_search_panel(app, phone, log)
-    m = phone.find(text="Terror", region=SEARCH_ROW)
-    if not m:
-        swipe_row_to_start(phone)  # Terror is the row's second target
-        m = phone.find(text="Terror", region=SEARCH_ROW)
-    if not m:
-        raise ElementNotFound("Terror isn't in the search row")
-    phone.tap_xy(m.center[0], m.center[1] - 60)  # the tile picture above its name
-    time.sleep(1.2)
-    phone.tap_xy(*AUTO_JOIN_FLAG)
-    phone.wait_for(text="Auto", region=AUTO_JOIN_TITLE, timeout=10)
-    time.sleep(1)
-    phone.forget_screen()
-    if button_is(phone.screen(), AUTO_JOIN_STOP, hues=(5, 25)):  # orange: Auto-Join is on
-        phone.tap_xy(*mid(AUTO_JOIN_STOP))
-        time.sleep(1.5)
-        log.info("auto-join: stopped")
+    open_auto_join(app, phone, log)
+    stop_if_running(phone, log)
     for _ in range(4):  # Stop puts the Queue Limit back to 6
         phone.forget_screen()
         if queue_limit_is_1(phone.screen()):
@@ -186,8 +171,49 @@ def set_queue_limit(app: Kingshot, phone: Phone, log: Logger) -> None:
     if not button_is(phone.screen(), AUTO_JOIN_STOP, hues=(5, 25)):
         raise RuntimeError("Auto-Join didn't start (Stop isn't orange)")
     log.info("auto-join: enabled with Queue Limit 1")
+    close_auto_join(phone)
+
+
+def stop_auto_join(app: Kingshot, phone: Phone, log: Logger) -> None:
+    """Auto Join off (so no rally takes a march), and back to the world map. Nothing to do if it's already off."""
+    open_auto_join(app, phone, log)
+    if not stop_if_running(phone, log):
+        log.info("auto-join: already off")
+    close_auto_join(phone)
+    on_world_map(phone)  # Back closes the search panel
+
+
+def stop_if_running(phone: Phone, log: Logger) -> bool:
+    """Tap Stop if Auto-Join runs (its Stop is orange). True if it was stopped."""
+    phone.forget_screen()
+    if not button_is(phone.screen(), AUTO_JOIN_STOP, hues=(5, 25)):
+        return False
+    phone.tap_xy(*mid(AUTO_JOIN_STOP))
+    time.sleep(1.5)
+    log.info("auto-join: stopped")
+    return True
+
+
+def close_auto_join(phone: Phone) -> None:
     phone.tap_xy(*AUTO_JOIN_CLOSE)
     phone.wait_gone(text="Auto", region=AUTO_JOIN_TITLE, timeout=5)
+
+
+def open_auto_join(app: Kingshot, phone: Phone, log: Logger) -> None:
+    """Search panel -> Terror -> the Auto Join flag (bottom right) -> the Auto-Join pop-up."""
+    open_search_panel(app, phone, log)
+    m = phone.find(text="Terror", region=SEARCH_ROW)
+    if not m:
+        swipe_row_to_start(phone)  # Terror is the row's second target
+        m = phone.find(text="Terror", region=SEARCH_ROW)
+    if not m:
+        raise ElementNotFound("Terror isn't in the search row")
+    phone.tap_xy(m.center[0], m.center[1] - 60)  # the tile picture above its name
+    time.sleep(1.2)
+    phone.tap_xy(*AUTO_JOIN_FLAG)
+    phone.wait_for(text="Auto", region=AUTO_JOIN_TITLE, timeout=10)
+    time.sleep(1)
+    phone.forget_screen()
 
 
 def mid_region(region: tuple[float, float, float, float]) -> tuple[int, int]:

@@ -25,6 +25,8 @@ from core.schedule import At
 from core.task import job
 from core.timeparse import parse_duration
 from core.vision import crop, load_template, median_hue
+from jobs.farming import march_queue, on_world_map, set_queue_limit, stop_auto_join, to_world_map
+from jobs.online_rewards import close_panel
 from regions import (
     COMPASS_BUTTON,
     DEPLOY_BUTTON,
@@ -56,11 +58,43 @@ BLANK = (540, 300)  # dim area above pop-ups
 DEPLOY_TAP = (822, 2210)  # centre of the Deploy button
 
 
-@job(schedule=At("00:05", "12:00", tz="UTC"), priority=110, timeout=1200)  # 5:35am + 5:30pm IST, last
+@job(schedule=At("00:05", "12:00", tz="UTC"), priority=110, timeout=1800)  # 5:35am + 5:30pm IST, last
 def intel_mission(app: Kingshot, phone: Phone, log: Logger):
-    if phone.exists(text="World", region=NAV_REGION):  # on the town: the button names the world map
-        phone.tap(text="World", region=NAV_REGION)
-        phone.wait_for(text="Town", region=NAV_REGION, timeout=15)
+    """Auto-Join off first (a rally can take the last free march, and bear / lion missions need one), wait for a
+    free march, do the missions; then always Auto-Join back on with Queue Limit 1."""
+    to_world_map(phone)
+    stop_auto_join(app, phone, log)
+    try:
+        wait_for_free_march(phone, log)
+        missions(app, phone, log)
+    finally:
+        try:
+            app.to_main_screen(phone, log)
+            to_world_map(phone)
+            set_queue_limit(app, phone, log)
+            on_world_map(phone)
+        except (ElementNotFound, RuntimeError) as e:  # must not hide the missions' own error
+            log.warning("auto-join: couldn't switch it back on (%s); farming's next round does it", e)
+
+
+def wait_for_free_march(phone: Phone, log: Logger, timeout: float = 600) -> None:
+    """Until the March Queue (side panel, Wilderness tab) has an "Idle" slot: a rally march comes back within
+    minutes. After the timeout it carries on anyway (tents and swords don't need a march)."""
+    end = time.time() + timeout
+    while True:
+        slots = march_queue(phone, log)
+        close_panel(phone)
+        if any(q.idle for q in slots):
+            return
+        if time.time() > end:
+            log.info("intel: still no free march after %d s; carrying on (bear / lion get skipped)", timeout)
+            return
+        log.info("intel: no free march; looking again in 30 s")
+        time.sleep(30)
+
+
+def missions(app: Kingshot, phone: Phone, log: Logger) -> None:
+    """World map -> Intel Mission: claim the ticked pins and do the open missions (see the module docstring)."""
     open_intel(app, phone, log)
     done = claims = 0
     skipped = set()
@@ -184,7 +218,10 @@ def do_mission(phone: Phone, log: Logger, kind: str, x: int, y: int) -> bool:
         phone.wait_for(text="Tap anywhere", region=POPUP_EXIT, timeout=120)
         tap_to_exit(phone)
     elif kind in ("bear", "lion"):
-        phone.wait_for(text="Deploy", region=SCREEN_TITLE, timeout=10)
+        if not phone.exists(text="Deploy", region=SCREEN_TITLE, timeout=10):  # no free march: Attack opens nothing
+            log.info("intel: %s at (%d, %d): no Deploy page (no free march?); skipping it", kind, x, y)
+            back_to_world(phone)
+            return False
         phone.tap(image="deploy_m1", region=DEPLOY_PRESETS, timeout=5)
         time.sleep(1)
         phone.forget_screen()
