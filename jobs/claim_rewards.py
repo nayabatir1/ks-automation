@@ -74,8 +74,7 @@ def alliance_rewards(app: Kingshot, phone: Phone, log: Logger):
     sits in a different place on each tab), then open the big chest while it glows (its badge number changes, so
     the glow decides). !! Never "Go" (shops) or the anonymous-gift checkbox."""
     open_alliance(app, phone, log)
-    phone.tap(image="alliance_chests", region=ALLIANCE_BUTTONS, timeout=5)  # the chest icon
-    phone.wait_for(text="Chests", region=SCREEN_TITLE, timeout=10)
+    open_alliance_page(phone, "alliance_chests", "Chests")  # the chest icon
     log.info("alliance chests open")
     for tab, xy in CHEST_TABS.items():
         phone.tap_xy(*xy)
@@ -106,8 +105,7 @@ def help_members(app: Kingshot, phone: Phone, log: Logger):
     """Alliance -> Help -> "Help All" (helps every member's request; earns alliance tokens). Nothing to do when the
     button isn't there (nobody left to help). !! Never "View" (Auto-Help is a paid monthly card)."""
     open_alliance(app, phone, log)
-    phone.tap(image="alliance_help", region=ALLIANCE_BUTTONS, timeout=5)  # the handshake icon
-    phone.wait_for(text="Help", region=SCREEN_TITLE, timeout=10)
+    open_alliance_page(phone, "alliance_help", "Help")  # the handshake icon
     try:
         phone.tap(text="Help All", region=HELP_ALL, timeout=3)
         time.sleep(1.5)
@@ -116,6 +114,16 @@ def help_members(app: Kingshot, phone: Phone, log: Logger):
         log.info("help: nobody to help")
     phone.back()  # Help -> Alliance
     phone.back()  # Alliance -> city / world map
+
+
+def open_alliance_page(phone: Phone, icon: str, title: str, tries: int = 3) -> None:
+    """Tap a button of the Alliance page by its icon until its page shows (titled `title`): a tap while the Alliance
+    page is still settling (e.g. right after coming back from Chests) is ignored."""
+    for _ in range(tries):
+        phone.tap(image=icon, region=ALLIANCE_BUTTONS, timeout=5)
+        if phone.exists(text=title, region=SCREEN_TITLE, timeout=5):
+            return
+    raise ElementNotFound(f"the Alliance {title} page didn't open after {tries} taps")
 
 
 def open_alliance(app: Kingshot, phone: Phone, log: Logger):
