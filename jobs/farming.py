@@ -70,10 +70,10 @@ if TYPE_CHECKING:
     from game import Kingshot
 
 RESOURCES = ("Bread", "Wood", "Stone", "Iron")
-TILE_NAMES = ("Mill", "Lumberyard", "Quarry", "Iron Mine")  # the tiles they're gathered at (March Queue titles)
+TILE_KEYS = ("Mill", "Lumber", "Quarry", "ron Mine")  # in their tiles' names (Idle Mill / Lumberyard / ...)
 MARCHES = 6  # march slots ("Marching N/6")
-EVERY = timedelta(hours=7, minutes=30)  # a Lv.8 gather takes ~7.5 h
-FARMING_FILE = config.LOG_DIR / "farming.json"  # when the marches were last recalled and resent (a regular run)
+EVERY = timedelta(hours=7, minutes=30)  # fallback round time when the gathering timers don't read
+FARMING_FILE = config.LOG_DIR / "farming.json"  # next_refresh: the next regular run; march: last march time (s)
 
 
 @dataclass
@@ -94,8 +94,10 @@ DEPLOY_TAP = (822, 2240)
 
 @job(timeout=900)  # every 7.5 h (the job returns it); waiting for recalled marches can take minutes
 def farming(app: Kingshot, phone: Phone, log: Logger):
-    """The regular run (EVERY): set_queue_limit, then recall and resend everything. A follow-up run (marches were
-    still moving, or a resource failed) only sends the resources that aren't out, without recalling."""
+    """The regular run (when the slowest march of the last round is due home): set_queue_limit, then recall and
+    resend everything. A follow-up run (marches still moving, or a resource failed) only sends the resources that
+    aren't out, without recalling. Once all marches gather, the next regular run is booked for the longest gathering
+    time left + the march time back (see plan_next)."""
     refresh = refresh_due()
     next_run = [EVERY]
 
@@ -111,12 +113,27 @@ def farming(app: Kingshot, phone: Phone, log: Logger):
 
 
 def refresh_due() -> bool:
-    """A regular run: the last full send (FARMING_FILE) was at least EVERY - 30 min ago, or never."""
+    """A regular run: the time booked for it (FARMING_FILE "next_refresh", minus 2 min) has come, or none is booked."""
+    data = load_farming()
     try:
-        sent = datetime.fromisoformat(json.loads(FARMING_FILE.read_text())["refreshed"])
-    except (FileNotFoundError, ValueError, KeyError):
-        return True
-    return utcnow() - sent >= EVERY - timedelta(minutes=30)
+        if "next_refresh" in data:
+            return utcnow() >= datetime.fromisoformat(data["next_refresh"]) - timedelta(minutes=2)
+        if "refreshed" in data:  # the older file: the last full send + EVERY
+            return utcnow() - datetime.fromisoformat(data["refreshed"]) >= EVERY - timedelta(minutes=30)
+    except ValueError:
+        pass
+    return True
+
+
+def load_farming() -> dict:
+    try:
+        return json.loads(FARMING_FILE.read_text())
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+def save_farming(**values: object) -> None:
+    FARMING_FILE.write_text(json.dumps({**load_farming(), **values}))
 
 
 def open_search_panel(app: Kingshot, phone: Phone, log: Logger) -> None:
@@ -206,13 +223,13 @@ def gather_all(app: Kingshot, phone: Phone, log: Logger, recall: bool = True) ->
     to_world_map(phone)
     if recall:
         recall_gathering(phone, log)
-        FARMING_FILE.write_text(json.dumps({"refreshed": utcnow().isoformat()}))
+        save_farming(next_refresh=(utcnow() + EVERY).isoformat())  # for now; plan_next books the real time
     on_world_map(phone)
     slots = march_queue(phone, log)
     close_panel(phone)
     # wait for marches coming home (they free slots); on a regular run also for ours still on their way (recalled
     # once they gather). A follow-up run doesn't wait for those: they're the ones it sent.
-    moving = [q for q in slots if q.moving and (recall or "Return" in q.title)]
+    moving = [q for q in slots if q.moving and (recall or q.returning)]
     if moving:
         timers = [q.timer for q in moving if q.timer]
         wait = (max(timers) if timers else timedelta(minutes=2)) + timedelta(seconds=20)
@@ -237,6 +254,36 @@ def gather_all(app: Kingshot, phone: Phone, log: Logger, recall: bool = True) ->
     if failed:
         log.info("trying %s again in %d min", ", ".join(failed), config.RETRY_MINUTES)
         return timedelta(minutes=config.RETRY_MINUTES)
+    return plan_next(phone, log, sent=bool(todo[:free]))
+
+
+def plan_next(phone: Phone, log: Logger, sent: bool) -> timedelta:
+    """When to run next, from the March Queue. Ours still on their way: when the slowest arrives (right after
+    sending, that's also the march time, kept for the way back). All gathering: the next regular run, when the
+    slowest is home again = its gathering time left + the march time back. Timers unread: EVERY."""
+    to_world_map(phone)
+    on_world_map(phone)
+    slots = march_queue(phone, log)
+    close_panel(phone)
+    ours = [q for q in slots if q.kind]
+    on_way = [q for q in ours if q.on_way]
+    if on_way:
+        timers = [q.timer for q in on_way if q.timer]
+        wait = max(timers) if timers else timedelta(minutes=2)
+        if sent and timers:
+            save_farming(march=wait.total_seconds())
+        log.info("%d march(es) on their way (longest %s); back when they gather", len(on_way), wait)
+        return wait + timedelta(seconds=20)
+    gathering = [q.timer for q in ours if q.gathering]
+    left = [t for t in gathering if t]
+    if left and len(left) == len(gathering):
+        march = timedelta(seconds=float(load_farming().get("march", 300)))
+        wait = max(left) + march + timedelta(minutes=1)
+        save_farming(next_refresh=(utcnow() + wait).isoformat())
+        log.info("all gathering (longest %s left) + %s back: next round in %s", max(left), march, wait)
+        return wait
+    log.info("gathering times not readable; next round in %s", EVERY)
+    save_farming(next_refresh=(utcnow() + EVERY).isoformat())
     return EVERY
 
 
@@ -259,27 +306,41 @@ class Slot:
     line2: str
 
     @property
+    def text(self) -> str:
+        """Both lines (a march on its way has its timer on the title line: "Go to Lv.8 Idle Iron Mine 00:00:10")."""
+        return f"{self.title} {self.line2}"
+
+    @property
     def idle(self) -> bool:
         return "Idle" in self.line2 or self.title.startswith("March Queue")
 
     @property
-    def ours(self) -> bool:
-        """A march to one of our tiles (not a secured gather at an alliance "Great ..." building)."""
-        return "Great" not in self.title and any(t in self.title for t in TILE_NAMES)
+    def kind(self) -> str | None:
+        """The resource of one of our marches, from its tile's name (OCR reads "Iron" as "lron": the keys skip that
+        letter). None for anything else, also a secured gather at an alliance "Great ..." building."""
+        if "Great" in self.text:
+            return None
+        return next((k for k, t in zip(RESOURCES, TILE_KEYS, strict=True) if t in self.text), None)
 
     @property
-    def kind(self) -> str | None:
-        """The resource of one of our marches, from its tile's name."""
-        return (
-            next((k for k, t in zip(RESOURCES, TILE_NAMES, strict=True) if t in self.title), None)
-            if self.ours
-            else None
-        )
+    def returning(self) -> bool:
+        return "eturn" in self.text
+
+    @property
+    def on_way(self) -> bool:
+        """One of ours still marching to its tile: "Go to Lv.8 Idle Mill"."""
+        return bool(self.kind) and "Go to" in self.text
+
+    @property
+    def gathering(self) -> bool:
+        """One of ours at its tile: any row of ours that isn't on its way or coming home (OCR can garble "Gathering"
+        into "Da ng", so the word itself isn't relied on)."""
+        return bool(self.kind) and not self.on_way and not self.returning
 
     @property
     def moving(self) -> bool:
-        """Coming home, or one of our marches on its way to its tile (not gathering yet)."""
-        return "Return" in self.title or (self.ours and "Gather" not in self.title)  # OCR may add a stray first char
+        """Coming home, or one of ours still on its way to its tile."""
+        return self.returning or self.on_way
 
     @property
     def timer(self) -> timedelta | None:
