@@ -123,6 +123,14 @@ BANK_DIALOG_DEPOSIT = (
 )  # deposit dialog: teal "Deposit" (orange "TOP UP NOW" left of it = money: never)
 MERCHANT_BUY_ITEM = (0.25, 0.41, 0.9, 0.46)  # merchant gem buy dialog: item name ("10 VIP XP")
 MERCHANT_BUY_BUTTON = (0.28, 0.61, 0.72, 0.67)  # ...its orange gem-price button
+PURCHASE_TEXT = (0.1, 0.47, 0.9, 0.52)  # gem "Purchase" pop-up: "Confirm to spend 19 gems to purchase this item?"
+PURCHASE_DONT_SHOW = (
+    297,
+    1310,
+    347,
+    1360,
+)  # ...its "Don't show this again today" checkbox (pixels; green tick when on)
+PURCHASE_CONFIRM = (330, 1400, 750, 1500)  # ...its orange gem button (pixels)
 MAIL_BUTTON = (0.8, 0.8, 1, 0.9)  # bottom right (town and world map): the mail envelope (templates/mail_button.png)
 MAIL_TABS = {"Alliance": (336, 293), "System": (538, 293), "Reports": (745, 293)}  # Mail: the tabs with rewards
 MAIL_CLAIM_ALL = (0.5, 0.95, 1, 1)  # Mail: "Read & Claim All" (bottom right; "Delete Read" left: never)

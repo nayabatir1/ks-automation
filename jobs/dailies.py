@@ -36,6 +36,9 @@ from regions import (
     MERCHANT_TIMER,
     NAV_REGION,
     POPUP_CONTINUE,
+    PURCHASE_CONFIRM,
+    PURCHASE_DONT_SHOW,
+    PURCHASE_TEXT,
     SCREEN_TITLE,
     SHOP_BOTTOM_TABS,
     SHOP_FREE_AREA,
@@ -63,6 +66,7 @@ if TYPE_CHECKING:
 TAB_SWIPE = (900, 200)  # x from / to: one swipe shows the next ~2.5 tabs
 MAX_TAB_PAGES = 8
 BUBBLE_SCALES = (0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.1)  # bubbles are drawn smaller near the town edge
+MAX_VIP_XP_BUYS = 2  # VIP XP (gems) per run at most; one that doesn't go through ends VIP XP for the run
 MAX_MERCHANT_ROUNDS = 300  # buys + refreshes per run, so it can never loop (one stock took ~80 buys)
 SEARCH_SWIPE = (800, 450)
 PRICE_ROWS = (0, 0.32, 1, 0.67)  # merchant: the rows with the 6 boxes (icons and price bars)
@@ -164,7 +168,7 @@ def nomadic_merchant(app: Kingshot, phone: Phone, log: Logger):
     phone.tap(text="Nomadic", region=SHOP_BOTTOM_TABS, timeout=10)
     phone.wait_for(text="Refreshes in", region=MERCHANT_TIMER, timeout=10)
     log.info("nomadic merchant open")
-    bought = refreshes = 0
+    bought = refreshes = vip_tries = 0
     for round_no in range(MAX_MERCHANT_ROUNDS):
         # one screenshot of the price bars, all 6 evaluated; then tap each resource-priced one, but re-check that
         # one bar just before its tap (~0.3 s): a buy restocks and reorders the boxes, so a box can turn into gems
@@ -183,8 +187,12 @@ def nomadic_merchant(app: Kingshot, phone: Phone, log: Logger):
                     phone.tap_xy(*xy)  # resources: bought at once
                     bought += 1
                     time.sleep(0.3)
-                elif price_bar(now, xy) and vip_xp(now, xy):
-                    bought += buy_vip_xp(phone, log, xy)
+                elif price_bar(now, xy) and vip_xp(now, xy) and vip_tries < MAX_VIP_XP_BUYS:
+                    vip_tries += 1
+                    got = buy_vip_xp(phone, log, xy)
+                    bought += got
+                    if not got:  # it didn't go through: no more VIP XP this run (it can't loop on a pop-up)
+                        vip_tries = MAX_VIP_XP_BUYS
             if round_no % 5 == 4 and not merchant_still_open(phone, log):
                 log.info("merchant: the merchant screen is gone; stopping")
                 break
@@ -221,7 +229,9 @@ def merchant_still_open(phone: Phone, log: Logger) -> bool:
 
 
 def buy_vip_xp(phone: Phone, log: Logger, xy: tuple[int, int]) -> int:
-    """Gem buys open a "Buy" dialog: check it is VIP XP, then tap its orange gem button. Returns 1 if bought."""
+    """Gem buys open a "Buy" dialog: check it is VIP XP, then tap its orange gem button. Then a "Purchase" pop-up may
+    ask "Confirm to spend N gems ...?": only for the same price, tick "Don't show this again today" (so the next buy
+    doesn't ask) and confirm. Returns 1 only once the merchant is back (the buy went through), else 0."""
     phone.tap_xy(*xy)
     try:
         phone.wait_for(text="VIP XP", region=MERCHANT_BUY_ITEM, timeout=4)
@@ -229,6 +239,7 @@ def buy_vip_xp(phone: Phone, log: Logger, xy: tuple[int, int]) -> int:
         log.info("merchant: no VIP XP buy dialog; not buying")
         phone.back()
         return 0
+    price = gem_count(phone.read_text(MERCHANT_BUY_BUTTON))
     hue = vision.median_hue(phone.screen(MERCHANT_BUY_BUTTON), MERCHANT_BUY_BUTTON)
     if not 8 <= hue <= 30:
         raise RuntimeError(f"VIP XP buy button isn't orange (hue {hue:.0f}); not tapping")
@@ -236,8 +247,37 @@ def buy_vip_xp(phone: Phone, log: Logger, xy: tuple[int, int]) -> int:
     phone.tap_xy(int((x1 + x2) / 2 * 1080), int((y1 + y2) / 2 * 2340))
     time.sleep(1.5)
     phone.forget_screen()
-    log.info("merchant: bought VIP XP (gems)")
+    confirm = phone.read_text(PURCHASE_TEXT)
+    if "Confirm to spend" in confirm:
+        asked = gem_count(confirm)
+        if price is None or asked != price:
+            log.info("merchant: the purchase pop-up asks %s gems, the box said %s; not buying", asked, price)
+            phone.back()
+            return 0
+        img = phone.screen()
+        if vision.coloured_share(img, PURCHASE_DONT_SHOW) < 0.2:  # not ticked yet
+            phone.tap_xy(
+                (PURCHASE_DONT_SHOW[0] + PURCHASE_DONT_SHOW[2]) // 2,
+                (PURCHASE_DONT_SHOW[1] + PURCHASE_DONT_SHOW[3]) // 2,
+            )
+            time.sleep(0.8)
+            img = phone.screen()
+        if not 8 <= vision.median_hue(img, PURCHASE_CONFIRM) <= 30:
+            raise RuntimeError("the purchase pop-up's gem button isn't orange; not tapping")
+        phone.tap_xy((PURCHASE_CONFIRM[0] + PURCHASE_CONFIRM[2]) // 2, (PURCHASE_CONFIRM[1] + PURCHASE_CONFIRM[3]) // 2)
+        time.sleep(1.5)
+        phone.forget_screen()
+    if not phone.exists(text="Refreshes in", region=MERCHANT_TIMER, timeout=3):
+        log.info("merchant: VIP XP buy didn't finish (something is still open); not counting it")
+        return 0
+    log.info("merchant: bought VIP XP for %s gems", price if price is not None else "?")
     return 1
+
+
+def gem_count(text: str) -> int | None:
+    """The gem amount in a price text ("19", "Confirm to spend 19 gems ..."), or None."""
+    m = re.search(r"(\d[\d,]*)\s*(?:gems|$)", text.strip()) or re.search(r"(\d[\d,]*)", text)
+    return int(m.group(1).replace(",", "")) if m else None
 
 
 def box_region(xy: tuple[int, int]) -> Region:
