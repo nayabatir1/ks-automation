@@ -8,6 +8,7 @@ see to that.
 
 from __future__ import annotations
 
+import json
 import time
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
@@ -38,6 +39,8 @@ if TYPE_CHECKING:
     from core.vision import Image
     from game import Kingshot
 
+MAX_WAIT = timedelta(hours=1)  # longest wait between checks while no chest is listed
+STATE_FILE = config.LOG_DIR / "online_rewards.json"  # misses: checks in a row past the chest time, none listed
 ROW_BUTTON_X = 606  # Daily tab: the button at the right end of each row (green tick or teal arrow)
 
 
@@ -47,8 +50,24 @@ def no_reward_yet(app: Kingshot, log: Logger) -> datetime | timedelta:
     if known and known > utcnow():
         log.info("no online reward ready yet; keeping the known chest time")
         return known
-    log.info("no online reward ready yet; checking again in %d min", config.RETRY_MINUTES)
-    return timedelta(minutes=config.RETRY_MINUTES)
+    # past the time it gave and still not listed (the Daily tab shows no timer then): wait longer each time,
+    # RETRY_MINUTES x 1, 2, 4, then at most MAX_WAIT; back to normal after the next claim
+    misses = int(load_state().get("misses", 0)) + 1
+    save_state(misses=misses)
+    wait = min(timedelta(minutes=config.RETRY_MINUTES) * 2 ** (misses - 1), MAX_WAIT)
+    log.info("no online reward ready yet (%d check(s) past its time); checking again in %s", misses, wait)
+    return wait
+
+
+def load_state() -> dict:
+    try:
+        return json.loads(STATE_FILE.read_text())
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+def save_state(**values: object) -> None:
+    STATE_FILE.write_text(json.dumps({**load_state(), **values}))
 
 
 def close_panel(phone: Phone) -> None:
@@ -82,15 +101,20 @@ def online_rewards(app: Kingshot, phone: Phone, log: Logger):
     log.info("online reward claimed")
 
     # 6. record when the next chest is ready, then tap a blank spot: that closes the chest screen and the panel
-    wait = None
-    for _ in range(8):  # the countdown is drawn a moment after "Next Chest Ready" shows
-        wait = phone.read_duration(region=CHEST_TIMER)
-        if wait is not None:
+    # (drawn a moment after "Next Chest Ready" shows; a reading only counts when the next one agrees, within a few
+    # seconds: a single read once dropped a digit, 0:07:59 for 03:07:59)
+    wait, last = None, None
+    for _ in range(10):
+        now = phone.read_duration(region=CHEST_TIMER)
+        if now is not None and last is not None and abs((last - now).total_seconds()) <= 5:
+            wait = now
             break
+        last = now
         time.sleep(0.5)
         phone.forget_screen()
     if wait is None:
-        raise RuntimeError("could not read the 'Next Chest Ready In' countdown")
+        raise RuntimeError("could not read the 'Next Chest Ready In' countdown (two readings never agreed)")
+    save_state(misses=0)
     log.info("next chest in %s", wait)
     phone.tap_xy(*BLANK_SPOT)
     phone.wait_gone(text="Next Chest Ready", region=CHEST_TIMER, timeout=10)
