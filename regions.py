@@ -100,6 +100,7 @@ INTEL_MEAT_ICON = (840, 172)  # Intel Mission: the meat icon (NOT the green "+" 
 GET_MORE_TITLE = (0.3, 0.18, 0.7, 0.23)  # stamina box: "Get More"
 FEAST_BUTTON = (745, 850, 995, 940)  # Get More: Gourmet Feast's button (grey while "Next Supply" counts down)
 TRAIN_LABEL = (0.55, 0.55, 1, 0.72)  # town: a training building's tap menu, "Train" label (icon just above)
+TRAIN_XI = (840, 1385, 985, 1545)  # training page: the tier XI portrait (rightmost; grey stone while locked)
 TRAIN_TABS = {"Barracks": (202, 2290), "Stable": (540, 2290), "Range": (882, 2300)}  # training page, bottom tabs
 TRAIN_TITLE = (0.2, 0.05, 0.8, 0.1)  # training page: "Apex Infantry", "Truegold Archers", ... (troop name)
 TRAIN_BUTTON = (0.5, 0.86, 0.85, 0.9)  # teal "Train" (reads "Speedups" while training: never tapped)

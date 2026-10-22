@@ -76,7 +76,7 @@ Nothing is lost when it's off: code, `state.json` and logs stay.
 
 | Job | When (IST) | What it does |
 |---|---|---|
-| troops_training | 5:35 am, 5:30 pm | Barracks → Train page → Barracks 950 / Stable 950 / Range 820 when idle |
+| troops_training | when the slowest training is done | Barracks → Train page → Barracks 950 / Stable 950 / Range 820 when idle |
 | dailies | 5:35 am | parts: gems, vip, deals, nomadic_merchant, cassie_recruit, truegold_crucible |
 | collect_stamina | 5:35 am, 5:30 pm | Intel Mission → meat icon → Gourmet Feast when lit |
 | intel_mission | 5:35 am, 5:30 pm | claim ticked pins; tent Rescue, swords Conquer, bear/lion Attack (preset M1); never boss |
@@ -99,8 +99,8 @@ Rules every job follows:
 - **Never** taps anything that costs real money or gems (₹ prices, TOP UP, "Buy", paid refreshes).
   The one exception the user chose: the Nomadic Merchant's **VIP XP** box is bought with gems.
 - Checks a button's text and colour before tapping it; if the screen isn't what it expects, it stops.
-- A failed job retries after `RETRY_MINUTES` minutes (config.py; never later than its next scheduled time).
-  Otherwise fixed-time jobs run only at their times.
+- A failed job retries after `retry_minutes` minutes (jobs.toml `[settings]`; never later than its next scheduled
+  time). Otherwise fixed-time jobs run only at their times.
 - Ends where it started (town or world map); the game is closed after the session.
 
 ---
@@ -143,8 +143,8 @@ state.json          per job: last run (UTC), status, error, next_at  (you can ed
    - save its next run time in `state.json`.
 6. If the next job is due within 10 s keep the game open, otherwise close it and put the phone to sleep.
 
-A job that fails gets a screenshot in `logs/failures/` and a retry after `RETRY_MINUTES` (config.py); the game is
-relaunched before the next job. A job may run at most `timeout` seconds (default 240, set in game.py; long jobs
+A job that fails gets a screenshot in `logs/failures/` and a retry after `retry_minutes` (jobs.toml `[settings]`); the
+game is relaunched before the next job. A job may run at most `timeout` seconds (default 240, set in game.py; long jobs
 set their own).
 
 ### A job file
@@ -166,7 +166,7 @@ def my_job(app, phone, log):
 ```
 
 - `@job(...)` options: `schedule=` (At / Every / Cron; leave out if the job returns its own next time),
-  `priority=` (order within a session), `timeout=` (seconds), `retry_minutes=` (default `config.RETRY_MINUTES`;
+  `priority=` (order within a session), `timeout=` (seconds), `retry_minutes=` (default: jobs.toml `retry_minutes`;
   None = never retry), `enabled=`.
 - `app` is the Kingshot object from game.py, `phone` is core/phone.py's Phone, `log` is a logger.
 - The file is picked up automatically (no registration). Files starting with `_` are ignored.

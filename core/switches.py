@@ -37,3 +37,9 @@ def job_on(job: str) -> bool:
 
 def part_on(job: str, part: str) -> bool:
     return bool(_load().get("parts", {}).get(job, {}).get(part, True))
+
+
+def settings(job: str, name: str) -> dict:
+    """A job's own settings table, e.g. settings("troops_training", "quantity") = [troops_training.quantity]."""
+    table = _load().get(job, {}).get(name, {})
+    return table if isinstance(table, dict) else {}

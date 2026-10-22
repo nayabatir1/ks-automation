@@ -1,6 +1,7 @@
 """Global settings. Edit these, or override with environment variables (see .env.example)."""
 
 import os
+import tomllib
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -66,4 +67,20 @@ SESSION_TAKEN_PAUSE_MINUTES = 60
 # --- jobs ---------------------------------------------------------------------
 # Minutes until a failed job is tried again (every job; a job can override it with retry_minutes=). Also how
 # soon online_rewards looks again when no chest is listed, and recruit_heroes when a timer didn't read.
-RETRY_MINUTES = 10
+RETRY_MINUTES = 10  # default; jobs.toml [settings] retry_minutes overrides it (see below)
+
+
+# --- jobs.toml [settings] (read at start-up; every timer tick is a new start) -----------------------------
+def _toml_settings() -> dict:
+    try:
+        with (BASE_DIR / "jobs.toml").open("rb") as f:
+            table = tomllib.load(f).get("settings", {})
+            return table if isinstance(table, dict) else {}
+    except (FileNotFoundError, tomllib.TOMLDecodeError):  # broken file: the defaults above
+        return {}
+
+
+try:
+    RETRY_MINUTES = max(1, int(_toml_settings().get("retry_minutes", RETRY_MINUTES)))
+except (TypeError, ValueError):
+    pass
