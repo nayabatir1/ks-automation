@@ -1,6 +1,7 @@
 """Kingshot job: Voyage event (Deals). Every 8 h.
 
-Deals (gift icon, top right) -> first tab: the Wavebound Voyage event while it runs. Not there: do nothing.
+Deals (gift icon, top right) -> the Wavebound Voyage tab (found by its ship icon or name, wherever it is in the
+tab row) while the event runs. Not there: do nothing.
 Otherwise: green "Claim All" (ships back with chests) -> teal "Dispatch All" (sends them out again, ~8 h), then
 Back to close Deals; the runner closes the game.
 !! Never "Finish" / "Complete All" (speed up with items), the green "+", "Employ Voyager Team" or "Auto Voyage".
@@ -14,9 +15,10 @@ from typing import TYPE_CHECKING
 
 from core.task import job
 from core.vision import coloured_share, median_hue
+from jobs.dailies import open_tab
 from regions import (
-    DEALS_FIRST_TAB,
     DEALS_LABEL,
+    DEALS_TAB_ROW,
     SCREEN_TITLE,
     VOYAGE_BUTTON,
     VOYAGE_DURATION,
@@ -38,9 +40,8 @@ def voyage(app: Kingshot, phone: Phone, log: Logger):
     # 1. Deals (top right) -> its first tab
     app.tap_on_main(phone, log, text="Deals", region=DEALS_LABEL)
     phone.wait_for(text="Deals", region=SCREEN_TITLE, timeout=10)
-    phone.tap_xy(*DEALS_FIRST_TAB)
-    if not phone.exists(text="Voyage", region=VOYAGE_TAB, timeout=5):
-        log.info("voyage: event not running (first Deals tab isn't Wavebound Voyage); nothing to do")
+    if not open_voyage_tab(phone):
+        log.info("voyage: event not running (no Wavebound Voyage tab in Deals); nothing to do")
         phone.back()  # close Deals
         return EVERY
     log.info("voyage open")
@@ -58,6 +59,22 @@ def voyage(app: Kingshot, phone: Phone, log: Logger):
     log.info("voyage: ships back in %s", phone.read_duration(region=VOYAGE_DURATION) or "?")
     phone.back()  # close Deals
     return EVERY
+
+
+def open_voyage_tab(phone: Phone) -> bool:
+    """The Wavebound Voyage tab, wherever it is in the Deals tab row (a new event can push it along): already open,
+    else its ship icon (big when selected, small with the name when not), else a tab named "Voyage" (the row is
+    swiped to find it). True once the "Wavebound Voyage" sub-tab shows."""
+    time.sleep(1.5)  # Deals settles (a swipe or tap right after it opens can be lost)
+    if phone.exists(text="Voyage", region=VOYAGE_TAB, timeout=2):
+        return True
+    for icon in ("deals_voyage_ship_small", "deals_voyage_ship"):
+        m = phone.find(image=icon, region=DEALS_TAB_ROW)
+        if m:
+            phone.tap_xy(*m.center)
+            if phone.exists(text="Voyage", region=VOYAGE_TAB, timeout=5):
+                return True
+    return open_tab(phone, "Voyage") and phone.exists(text="Voyage", region=VOYAGE_TAB, timeout=5)
 
 
 def tap_button(phone: Phone, label: str, hues: tuple[int, int], region: Region = VOYAGE_BUTTON) -> bool:
