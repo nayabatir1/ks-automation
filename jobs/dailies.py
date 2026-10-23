@@ -21,7 +21,7 @@ from core import switches, vision
 from core.phone import ElementNotFound
 from core.schedule import At, utcnow
 from core.task import job
-from jobs.online_rewards import ROW_BUTTON_X, close_panel, open_daily_tab
+from jobs.online_rewards import ROW_BUTTON_X, close_panel, find_daily_row, open_daily_tab
 from regions import (
     CRUCIBLE_REFINE,
     CRUCIBLE_REMAINING,
@@ -45,7 +45,6 @@ from regions import (
     SHOP_NAV,
     SHOP_TAB_DOTS,
     SHOP_TAB_ROW_Y,
-    SIDE_PANEL,
     TAB_NAMES,
     TAB_TITLE,
     TOPUP_TITLE,
@@ -332,16 +331,11 @@ def truegold_crucible(app: Kingshot, phone: Phone, log: Logger):
     """World map -> side panel -> Daily tab -> scroll down to "Truegold Crucible" -> its arrow -> Truegold Crucible.
     The Daily tab hides a row once its task is done ("Hide after mission completion"): no row = done today."""
     open_daily_tab(app, phone, log)
-    try:
-        m = phone.scroll_to(text="Truegold Crucible", region=SIDE_PANEL, max_swipes=10)
-    except ElementNotFound:
+    m = find_daily_row(phone, "Truegold Crucible")
+    if m is None:
         log.info("crucible: not in the Daily list (it's hidden once done today); nothing to do")
         close_panel(phone)
         return
-    if m.center[1] > PANEL_LOW_Y:  # at the panel's bottom edge its arrow is cut off: scroll it up a bit
-        phone.swipe(m.center[0], m.center[1], m.center[0], m.center[1] - 400, ms=500)
-        time.sleep(1)
-        m = phone.wait_for(text="Truegold Crucible", region=SIDE_PANEL, timeout=5)
     arrow = (ROW_BUTTON_X, m.center[1] + 23)
     box = (arrow[0] - 35, arrow[1] - 30, arrow[0] + 35, arrow[1] + 30)
     hue = vision.median_hue(phone.last_screen, box)
@@ -351,6 +345,7 @@ def truegold_crucible(app: Kingshot, phone: Phone, log: Logger):
     phone.wait_for(text="Remaining today", region=CRUCIBLE_REMAINING, timeout=10)
     log.info("truegold crucible open")
     # Refine until "Remaining today: 0" (7 a day; each costs more resources, instant, no pop-up)
+    refined = 0
     for _ in range(8):
         left = refines_left(phone)
         if left is None:
@@ -359,9 +354,10 @@ def truegold_crucible(app: Kingshot, phone: Phone, log: Logger):
         if left == 0:
             break
         phone.tap(text="Refine", region=CRUCIBLE_REFINE, timeout=5)
+        refined += 1
         time.sleep(1)
         phone.forget_screen()
-    log.info("crucible: refines left today: %s", refines_left(phone))
+    log.info("crucible: refined %d time(s); refines left today: %s", refined, refines_left(phone))
     # then Super Refine x 1, once (never "x N")
     phone.tap(text="Super Refine", region=CRUCIBLE_SUPER_X1, timeout=5)
     dismiss_popup(phone, wait=3)
@@ -379,7 +375,6 @@ def refines_left(phone: Phone, tries: int = 3) -> int | None:
     return None
 
 
-PANEL_LOW_Y = 1300  # side panel: a row below this is too close to its bottom edge to tap its button
 DONE_FILE = config.LOG_DIR / "dailies.json"  # the parts done today (UTC): a retry skips them
 PARTS = {
     "gems": gems,

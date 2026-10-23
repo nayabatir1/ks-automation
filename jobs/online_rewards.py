@@ -17,6 +17,7 @@ import cv2
 import numpy as np
 
 import config
+from core import vision
 from core.phone import ElementNotFound
 from core.schedule import utcnow
 from core.task import job
@@ -41,6 +42,8 @@ if TYPE_CHECKING:
 
 MAX_WAIT = timedelta(hours=1)  # longest wait between checks while no chest is listed
 STATE_FILE = config.LOG_DIR / "online_rewards.json"  # misses: checks in a row past the chest time, none listed
+ROW_TITLE_MIN_X = 280  # a row's own title is centred (x ~335); its section header sits at the left (x ~215)
+DAILY_LOW_Y = 1300  # a row below this is too close to the panel's bottom edge to tap its button
 ROW_BUTTON_X = 606  # Daily tab: the button at the right end of each row (green tick or teal arrow)
 
 
@@ -157,6 +160,29 @@ def open_daily_tab(app: Kingshot, phone: Phone, log: Logger) -> None:
     else:
         raise ElementNotFound("the side panel's Daily tab didn't open")
     log.info("daily tab open")
+
+
+def find_daily_row(phone: Phone, title: str, max_swipes: int = 14) -> vision.Match | None:
+    """The Daily tab's row titled `title` (the centred title inside a row box, not the section header of the same
+    name at the left), scrolled into a tappable spot. Rows come and go (finished tasks hide), so their positions
+    differ: the list is scrolled in short, slow steps and every screen is read. None if it's not in the list."""
+    top = int(SIDE_PANEL[1] * phone.height) + 120
+    for _ in range(max_swipes + 1):
+        phone.forget_screen()
+        img = phone.screen(SIDE_PANEL)
+        for m in vision.ocr_lines(img, SIDE_PANEL):
+            if title in m.text and m.center[0] > ROW_TITLE_MIN_X and top < m.center[1] < DAILY_LOW_Y:
+                return m
+        phone.swipe(330, 1300, 330, 1000, ms=700)  # ~300 px: no row is skipped
+        time.sleep(1)
+        phone.forget_screen()
+        if vision.screen_diff(img, phone.screen(SIDE_PANEL), SIDE_PANEL) < 2:  # the list's end
+            img = phone.last_screen
+            for m in vision.ocr_lines(img, SIDE_PANEL):
+                if title in m.text and m.center[0] > ROW_TITLE_MIN_X and top < m.center[1] < DAILY_LOW_Y:
+                    return m
+            return None
+    return None
 
 
 def daily_tab_chosen(img: Image) -> bool:
