@@ -13,8 +13,9 @@ from typing import TYPE_CHECKING
 from core.schedule import At
 from core.task import job
 from core.vision import coloured_share
+from jobs.farming import to_world_map
 from jobs.intel_mission import open_intel, tap_to_exit
-from regions import FEAST_BUTTON, GET_MORE_TITLE, INTEL_MEAT_ICON, NAV_REGION
+from regions import FEAST_BUTTON, GET_MORE_TITLE, INTEL_MEAT_ICON
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -25,9 +26,7 @@ if TYPE_CHECKING:
 
 @job(schedule=At("00:05", "12:00", tz="UTC"), priority=105)  # 5:35am + 5:30pm IST, after dailies
 def collect_stamina(app: Kingshot, phone: Phone, log: Logger):
-    if phone.exists(text="World", region=NAV_REGION):  # on the town: the button names the world map
-        phone.tap(text="World", region=NAV_REGION)
-        phone.wait_for(text="Town", region=NAV_REGION, timeout=15)
+    to_world_map(phone)  # taps World again if the first tap is ignored
     open_intel(app, phone, log)
     phone.tap_xy(*INTEL_MEAT_ICON)
     phone.wait_for(text="Get More", region=GET_MORE_TITLE, timeout=10)

@@ -37,6 +37,7 @@ from regions import (
     AUTO_JOIN_TITLE,
     AUTO_JOIN_TRACK,
     DEPLOY_BUTTON,
+    HERO_CARD,
     HERO_MINUS,
     LEFT_MID,
     MARCH_BADGE,
@@ -140,9 +141,7 @@ def open_search_panel(app: Kingshot, phone: Phone, log: Logger) -> None:
     """World map -> magnifying glass (bottom left) -> search panel. Skipped if it's already open."""
     if phone.exists(text="Search", region=SEARCH_PANEL_GO, timeout=1):
         return
-    if phone.exists(text="World", region=NAV_REGION):  # on the town: the button names the world map
-        phone.tap(text="World", region=NAV_REGION)
-        phone.wait_for(text="Town", region=NAV_REGION, timeout=15)
+    to_world_map(phone)
     app.tap_on_main(
         phone, log, image="search_button", region=SEARCH_BUTTON, then={"text": "Search", "region": SEARCH_PANEL_GO}
     )
@@ -401,11 +400,17 @@ def max_timer_text(rows: list[March]) -> str:
     return str(max(timers)) if timers else "timer unread"
 
 
-def to_world_map(phone: Phone) -> None:
-    if phone.exists(text="World", region=NAV_REGION):  # on the town: the button names the world map
+def to_world_map(phone: Phone, tries: int = 3) -> None:
+    """From the town to the world map (the bottom-right button names the other view). A tap right after the game
+    has loaded can be ignored: tap again until the button says "Town"."""
+    for _ in range(tries):
+        if not phone.exists(text="World", region=NAV_REGION):  # already on the world map
+            return
         phone.tap(text="World", region=NAV_REGION)
-        phone.wait_for(text="Town", region=NAV_REGION, timeout=15)
-        time.sleep(1.5)
+        if phone.exists(text="Town", region=NAV_REGION, timeout=8):
+            time.sleep(1.5)
+            return
+    raise ElementNotFound(f"the world map didn't open after {tries} taps on World")
 
 
 def marches_out(phone: Phone) -> int:
@@ -525,9 +530,7 @@ def gather(phone: Phone, log: Logger, kind: str, tries: int = 3) -> None:
                 break
         else:
             raise ElementNotFound(f"{kind}: the formation page didn't open after Gather")
-        for hero in (3, 2):  # right to left, so the cards can't shift under the taps
-            phone.tap_xy(*HERO_MINUS[hero])
-            time.sleep(1)
+        remove_heroes(phone, log, kind)
         hue = vision.median_hue(phone.screen(DEPLOY_BUTTON), DEPLOY_BUTTON)
         if not 75 <= hue <= 105:
             raise RuntimeError(f"{kind}: Deploy isn't teal (hue {hue:.0f}); not tapping")
@@ -545,6 +548,38 @@ def gather(phone: Phone, log: Logger, kind: str, tries: int = 3) -> None:
         log.info("%s: deployed (attempt %d)", kind, attempt + 1)
         return
     log.info("%s: no free tile after %d tries", kind, tries)
+
+
+def remove_heroes(phone: Phone, log: Logger, kind: str) -> None:
+    """Formation page: take heroes 3 and 2 off: tap the orange "-" of card 3, then of card 2 (right to left, so the
+    cards can't shift), then check both cards show the empty "+". A card still holding its hero gets its "-" tapped
+    again (a tap can be ignored); a "+" card is never tapped (that opens Select Heroes). Raises if a hero stays on:
+    that march isn't deployed (only this resource is tried again)."""
+    time.sleep(1)  # the page finishes opening
+    for _ in range(3):
+        phone.forget_screen()
+        img = phone.screen()
+        on = [hero for hero in (3, 2) if not card_empty(img, hero)]
+        if not on:
+            log.info("%s: heroes 2 and 3 off", kind)
+            return
+        for hero in on:
+            phone.tap_xy(*HERO_MINUS[hero])
+            time.sleep(1)
+    phone.forget_screen()
+    img = phone.screen()
+    still = [hero for hero in (3, 2) if not card_empty(img, hero)]
+    if still:
+        raise RuntimeError(f"{kind}: hero(es) {still} still on the formation after 3 tries; not deploying")
+    log.info("%s: heroes 2 and 3 off", kind)
+
+
+def card_empty(img: Image, hero: int) -> bool:
+    """Formation card 2 / 3 is empty: a dark card with a big white "+" (~2,200 white px in its middle; a hero's
+    card has none)."""
+    x, y = HERO_CARD[hero]
+    hsv = cv2.cvtColor(img[y - 40 : y + 40, x - 40 : x + 40], cv2.COLOR_BGR2HSV)
+    return int(((hsv[:, :, 1] < 40) & (hsv[:, :, 2] > 220)).sum()) > 800
 
 
 def swipe_row_to_start(phone: Phone) -> None:

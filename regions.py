@@ -153,6 +153,7 @@ SEARCH_TICK = (255, 2110, 305, 2160)  # search panel: "Only search for full Reso
 SEARCH_GO = (540, 2240)  # search panel: teal "Search"
 TILE_GATHER = (0.3, 0.48, 0.7, 0.53)  # found tile box: teal "Gather" (the "+" by Gathering Speed opens boosts: never)
 HERO_MINUS = {2: (641, 586), 3: (925, 586)}  # formation page: the orange "-" of hero cards 2 and 3
+HERO_CARD = {2: (539, 770), 3: (822, 770)}  # ...the middle of cards 2 and 3 (a white "+" when empty)
 SAME_TARGET_CANCEL = (0.05, 0.58, 0.5, 0.66)  # "Other Troops are marching toward the same target": orange Cancel
 MARCH_QUEUE = (0.05, 0.3, 0.55, 0.64)  # side panel > Wilderness: "March Queue" and its 6 rows
 QUEUE_ROW_Y = 790  # ...first row starts here (pixels); one row every QUEUE_ROW_STEP

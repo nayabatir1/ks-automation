@@ -18,6 +18,7 @@ import pytesseract
 from core import vision
 from core.schedule import At
 from core.task import job, run_parts
+from jobs.farming import to_world_map
 from regions import (
     ARENA_CHALLENGE,
     ARENA_MY_ROW,
@@ -46,9 +47,7 @@ def arena(app: Kingshot, phone: Phone, log: Logger):
 def pan_extra_intel_mission(app: Kingshot, phone: Phone, log: Logger):
     """World map -> compass button (Q4, right) -> Intel Mission: tap the hero portrait (top left) when it's there,
     which brings new missions. Then close Intel Mission and go to the town view."""
-    if phone.exists(text="World", region=NAV_REGION):  # on the town: the button names the world map
-        phone.tap(text="World", region=NAV_REGION)
-        phone.wait_for(text="Town", region=NAV_REGION, timeout=15)
+    to_world_map(phone)  # taps World again if the first tap is ignored
     app.tap_on_main(phone, log, image="compass_button", region=COMPASS_BUTTON)
     phone.wait_for(text="Refreshes In", region=INTEL_REFRESH, timeout=20)  # the mission map takes a while to load
     log.info("intel mission open")
