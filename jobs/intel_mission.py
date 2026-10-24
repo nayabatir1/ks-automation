@@ -39,6 +39,8 @@ from regions import (
     INTEL_VIEW,
     NAV_REGION,
     POPUP_EXIT,
+    QUIT_CANCEL,
+    QUIT_TEXT,
     SCREEN_TITLE,
 )
 
@@ -149,6 +151,9 @@ def missions(app: Kingshot, phone: Phone, log: Logger) -> None:
 
 
 def open_intel(app: Kingshot, phone: Phone, log: Logger):
+    """World map -> compass -> Intel Mission (nothing to do if it's already open)."""
+    if phone.exists(text="Refreshes In", region=INTEL_REFRESH, timeout=1):
+        return
     app.tap_on_main(phone, log, image="compass_button", region=COMPASS_BUTTON)
     phone.wait_for(text="Refreshes In", region=INTEL_REFRESH, timeout=20)  # the mission map takes a while to load
     time.sleep(1)
@@ -268,6 +273,10 @@ def tap_to_exit(phone: Phone, wait: float = 0) -> None:
 def back_to_world(phone: Phone) -> None:
     """Back to the world map (bottom menu says "Town"), whatever is open."""
     for _ in range(4):
-        if phone.exists(text="Backpack", region=NAV_REGION, timeout=2):
+        if phone.exists(text="Backpack", region=NAV_REGION, timeout=3):
             return
+        if phone.exists(text="Quit game", region=QUIT_TEXT, timeout=1):  # one Back too many: never quit
+            phone.tap(text="Cancel", region=QUIT_CANCEL, timeout=3)
+            time.sleep(1)
+            continue
         phone.back()

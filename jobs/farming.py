@@ -29,13 +29,15 @@ from core.timeparse import parse_duration
 from core.vision import load_template
 from jobs.online_rewards import close_panel
 from regions import (
-    AUTO_JOIN_CLOSE,
+    AUTO_JOIN_CLOSE_X,
     AUTO_JOIN_ENABLE,
     AUTO_JOIN_FLAG,
-    AUTO_JOIN_MINUS,
+    AUTO_JOIN_LIMIT_ROW,
+    AUTO_JOIN_LIMIT_TITLE,
+    AUTO_JOIN_MINUS_X,
     AUTO_JOIN_STOP,
     AUTO_JOIN_TITLE,
-    AUTO_JOIN_TRACK,
+    AUTO_JOIN_TRACK_X,
     DEPLOY_BUTTON,
     HERO_CARD,
     HERO_MINUS,
@@ -74,6 +76,7 @@ RESOURCES = ("Bread", "Wood", "Stone", "Iron")
 TILE_KEYS = ("Mill", "Lumber", "Quarry", "ron Mine")  # in their tiles' names (Idle Mill / Lumberyard / ...)
 MARCHES = 6  # march slots ("Marching N/6")
 EVERY = timedelta(hours=7, minutes=30)  # fallback round time when the gathering timers don't read
+WAIT_MAX = timedelta(minutes=20)  # waiting for marches to come home (within the job's 30 min timeout)
 FARMING_FILE = config.LOG_DIR / "farming.json"  # next_refresh: the next regular run; march: last march time (s)
 
 
@@ -93,18 +96,17 @@ SEARCH_PANEL_GO = (0.2, 0.9, 0.8, 0.99)  # the search panel's "Search" button (t
 DEPLOY_TAP = (822, 2240)
 
 
-@job(timeout=900)  # every 7.5 h (the job returns it); waiting for recalled marches can take minutes
+@job(timeout=1800)  # every 7.5 h (the job returns it); waiting for marches to come home can take many minutes
 def farming(app: Kingshot, phone: Phone, log: Logger):
-    """The regular run (when the slowest march of the last round is due home): set_queue_limit, then recall and
-    resend everything. A follow-up run (marches still moving, or a resource failed) only sends the resources that
-    aren't out, without recalling. Once all marches gather, the next regular run is booked for the longest gathering
-    time left + the march time back (see plan_next)."""
+    """Every run: set_queue_limit, then wait for the marches out (coming home, rallies) to free their slots. The
+    regular run (when the slowest march of the last round is due home) recalls and resends everything. A follow-up
+    run (a resource failed) only sends the resources that aren't out, without recalling. Once all marches gather, the
+    next regular run is booked for the longest gathering time left + the march time back (see plan_next)."""
     refresh = refresh_due()
     next_run = [EVERY]
 
     def queue_part(app: Kingshot, phone: Phone, log: Logger) -> None:
-        if refresh or app.parts:
-            set_queue_limit(app, phone, log)
+        set_queue_limit(app, phone, log)
 
     def gather_part(app: Kingshot, phone: Phone, log: Logger) -> None:
         next_run[0] = gather_all(app, phone, log, recall=refresh)
@@ -151,14 +153,15 @@ def open_search_panel(app: Kingshot, phone: Phone, log: Logger) -> None:
 
 def set_queue_limit(app: Kingshot, phone: Phone, log: Logger) -> None:
     """Search panel -> Terror -> Auto Join (flag, bottom right): Stop it if it runs (orange Stop), hold "-" until the
-    Queue Limit is 1 (the slider's track has no green fill), Enable (a fresh 8 h), close the pop-up."""
+    Queue Limit is 1 (see queue_limit_is_1), Enable (a fresh 8 h), close the pop-up and the search panel."""
     open_auto_join(app, phone, log)
     stop_if_running(phone, log)
     for _ in range(4):  # Stop puts the Queue Limit back to 6
-        phone.forget_screen()
-        if queue_limit_is_1(phone.screen()):
+        is_1, row_y = queue_limit_is_1(phone)
+        if is_1:
             break
-        phone.hold_xy(*mid(AUTO_JOIN_MINUS), seconds=3)
+        log.info("auto-join: Queue Limit above 1; holding -")
+        phone.hold_xy(AUTO_JOIN_MINUS_X, row_y, seconds=3)
         time.sleep(0.5)
     else:
         raise RuntimeError("the Auto-Join Queue Limit isn't 1 after holding -; not enabling")
@@ -171,6 +174,7 @@ def set_queue_limit(app: Kingshot, phone: Phone, log: Logger) -> None:
         raise RuntimeError("Auto-Join didn't start (Stop isn't orange)")
     log.info("auto-join: enabled with Queue Limit 1")
     close_auto_join(phone)
+    on_world_map(phone)  # Back closes the search panel
 
 
 def stop_auto_join(app: Kingshot, phone: Phone, log: Logger) -> None:
@@ -194,7 +198,10 @@ def stop_if_running(phone: Phone, log: Logger) -> bool:
 
 
 def close_auto_join(phone: Phone) -> None:
-    phone.tap_xy(*AUTO_JOIN_CLOSE)
+    title = phone.find(text="Auto", region=AUTO_JOIN_TITLE)
+    if not title:  # no blind tap: the Deals icon is there on the map
+        raise ElementNotFound("the Auto-Join pop-up isn't open")
+    phone.tap_xy(AUTO_JOIN_CLOSE_X, title.center[1])
     phone.wait_gone(text="Auto", region=AUTO_JOIN_TITLE, timeout=5)
 
 
@@ -230,36 +237,33 @@ def button_is(img: Image, box: tuple[int, int, int, int], hues: tuple[int, int])
     return vision.coloured_share(img, box) > 0.3 and hues[0] <= vision.median_hue(img, box) <= hues[1]
 
 
-def queue_limit_is_1(img: Image) -> bool:
-    """Queue Limit 1 = the slider's handle at the far left: no green fill in its track (6 fills it)."""
-    x1, y1, x2, y2 = AUTO_JOIN_TRACK
-    hsv = cv2.cvtColor(img[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
+def queue_limit_is_1(phone: Phone) -> tuple[bool, int]:
+    """The Auto-Join pop-up's Queue Limit is 1: its slider's track has no green fill (6 fills it). The row is found
+    from its "Queue Limit" header (the pop-up's layout moves with updates). Also returns the row's y."""
+    phone.forget_screen()
+    header = phone.find(text="Queue Limit", region=AUTO_JOIN_LIMIT_TITLE)
+    if not header:
+        raise ElementNotFound("the Auto-Join pop-up's Queue Limit isn't on screen")
+    y = header.center[1] + AUTO_JOIN_LIMIT_ROW
+    x1, x2 = AUTO_JOIN_TRACK_X
+    hsv = cv2.cvtColor(phone.screen()[y - 12 : y + 12, x1:x2], cv2.COLOR_BGR2HSV)
     green = (hsv[:, :, 0] >= 45) & (hsv[:, :, 0] <= 80) & (hsv[:, :, 1] > 120) & (hsv[:, :, 2] > 150)
-    return float(green.mean()) < 0.05
+    return float(green.mean()) < 0.05, y
 
 
 def gather_all(app: Kingshot, phone: Phone, log: Logger, recall: bool = True) -> timedelta:
     """recall=True (the regular run): recall every unsecured gathering march (map's Marching list; secured ones,
-    rallies and other marches stay). Then the side panel's Wilderness tab (March Queue: one row per march slot) says
-    what's left: marches still coming home or still on their way to a tile aren't waited for, the job comes back when
-    the longest of their timers has run out (the game is closed meanwhile). With none: send each resource that isn't
-    out into the "Idle" slots. A resource that fails is tried again after RETRY_MINUTES (only that one).
+    rallies and other marches stay). Then the side panel's Wilderness tab (March Queue: one row per march slot) is
+    watched until the marches out are home (see wait_for_marches). Then each resource that isn't out is sent into
+    the "Idle" slots. A resource that fails is tried again after RETRY_MINUTES (only that one).
     Returns when the job should run next."""
     to_world_map(phone)
     if recall:
         recall_gathering(phone, log)
         save_farming(next_refresh=(utcnow() + EVERY).isoformat())  # for now; plan_next books the real time
-    on_world_map(phone)
-    slots = march_queue(phone, log)
-    close_panel(phone)
-    # wait for marches coming home (they free slots); on a regular run also for ours still on their way (recalled
-    # once they gather). A follow-up run doesn't wait for those: they're the ones it sent.
-    moving = [q for q in slots if q.moving and (recall or q.returning)]
-    if moving:
-        timers = [q.timer for q in moving if q.timer]
-        wait = (max(timers) if timers else timedelta(minutes=2)) + timedelta(seconds=20)
-        log.info("%d march(es) still moving (longest %s); back in %s", len(moving), max(timers, default="?"), wait)
-        return wait
+    slots = wait_for_marches(phone, log, recall)
+    if slots is None:  # still out after WAIT_MAX: the job comes back later (the game is closed meanwhile)
+        return timedelta(minutes=config.RETRY_MINUTES)
     out = {k for q in slots if (k := q.kind)}
     todo = [k for k in RESOURCES if k not in out]
     free = sum(q.idle for q in slots)
@@ -280,6 +284,36 @@ def gather_all(app: Kingshot, phone: Phone, log: Logger, recall: bool = True) ->
         log.info("trying %s again in %d min", ", ".join(failed), config.RETRY_MINUTES)
         return timedelta(minutes=config.RETRY_MINUTES)
     return plan_next(phone, log, sent=bool(todo[:free]))
+
+
+def wait_for_marches(phone: Phone, log: Logger, recall: bool) -> list[Slot] | None:
+    """Watch the March Queue until nothing is coming home, no rally holds a slot a resource needs, and (regular run)
+    none of ours is still on its way to its tile (it's recalled once it gathers). A follow-up run doesn't wait for
+    ours on their way: they're the ones it sent. Looks again when the longest timer runs out (30 s at most).
+    Returns the last March Queue, or None if marches are still out after WAIT_MAX (the job's time is up)."""
+    end = time.time() + WAIT_MAX.total_seconds()
+    while True:
+        on_world_map(phone)
+        slots = march_queue(phone, log)
+        close_panel(phone)
+        out = {k for q in slots if (k := q.kind)}
+        todo = [k for k in RESOURCES if k not in out]
+        moving = [q for q in slots if q.returning or (recall and q.on_way)]
+        short = len(todo) - sum(q.idle for q in slots)  # slots a resource needs that a rally (or anything) holds
+        if not moving and short <= 0:
+            return slots
+        if time.time() > end:
+            log.info("marches still out after %s; trying again in %d min", WAIT_MAX, config.RETRY_MINUTES)
+            return None
+        timers = [q.timer for q in moving if q.timer]
+        wait = min(max(timers).total_seconds() + 5, 30) if timers else 30
+        log.info(
+            "%d march(es) coming home or on their way, %d slot(s) short; looking again in %d s",
+            len(moving),
+            max(short, 0),
+            wait,
+        )
+        time.sleep(wait)
 
 
 def plan_next(phone: Phone, log: Logger, sent: bool) -> timedelta:
@@ -404,13 +438,28 @@ def to_world_map(phone: Phone, tries: int = 3) -> None:
     """From the town to the world map (the bottom-right button names the other view). A tap right after the game
     has loaded can be ignored: tap again until the button says "Town"."""
     for _ in range(tries):
-        if not phone.exists(text="World", region=NAV_REGION):  # already on the world map
+        if on_world(phone, timeout=1):
             return
+        if not phone.exists(text="World", region=NAV_REGION):  # neither town nor world map (a pop-up?)
+            time.sleep(2)
+            continue
         phone.tap(text="World", region=NAV_REGION)
-        if phone.exists(text="Town", region=NAV_REGION, timeout=8):
+        if on_world(phone, timeout=10):
             time.sleep(1.5)
             return
     raise ElementNotFound(f"the world map didn't open after {tries} taps on World")
+
+
+def on_world(phone: Phone, timeout: float = 1) -> bool:
+    """On the world map: the bottom-right button says "Town", or the magnifying glass (bottom left, world map only)
+    shows. The image check also works when the map is tinted at night and the label doesn't read."""
+    try:
+        phone.wait_any(
+            {"text": "Town", "region": NAV_REGION}, {"image": "search_button", "region": SEARCH_BUTTON}, timeout=timeout
+        )
+        return True
+    except ElementNotFound:
+        return False
 
 
 def marches_out(phone: Phone) -> int:

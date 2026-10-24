@@ -39,6 +39,8 @@ from regions import (
     PURCHASE_CONFIRM,
     PURCHASE_DONT_SHOW,
     PURCHASE_TEXT,
+    QUIT_CANCEL,
+    QUIT_TEXT,
     SCREEN_TITLE,
     SHOP_BOTTOM_TABS,
     SHOP_FREE_AREA,
@@ -394,8 +396,6 @@ def refines_left(phone: Phone, tries: int = 3) -> int | None:
     return None
 
 
-QUIT_TEXT = (0.1, 0.38, 0.9, 0.48)  # the game's "Quit game?" prompt (Back on a main screen)
-QUIT_CANCEL = (0.08, 0.5, 0.48, 0.58)  # ...its orange Cancel (left; Confirm on the right quits: never)
 DONE_FILE = config.LOG_DIR / "dailies.json"  # the parts done today (UTC): a retry skips them
 PARTS = {
     "gems": gems,

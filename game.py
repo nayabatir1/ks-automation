@@ -28,6 +28,8 @@ from regions import (
     NAV_Q4,
     NAV_REGION,
     POPUP_X_REGION,
+    QUIT_CANCEL,
+    QUIT_TEXT,
     RESOURCE_PACK_ENTER,
     SESSION_TAKEN_TEXT,
     TAP_TO_CLOSE_REGION,
@@ -164,6 +166,7 @@ class Kingshot(Task):
             {"image": "close_x_orange", "region": POPUP_X_REGION},  # the same X on an orange sale pop-up
             {"text": "Welcome back", "region": WELCOME_TITLE},
             {"text": "Enter Game", "region": RESOURCE_PACK_ENTER},  # after an update (resource pack box)
+            {"text": "Quit game", "region": QUIT_TEXT},  # a Back too many on a main screen: always Cancel
             {"text": TAP_TO_CLOSE, "region": TAP_TO_CLOSE_REGION},  # e.g. "Chief Minister" appointment
             also or {"text": "Backpack", "region": NAV_REGION},
         ]
@@ -177,7 +180,7 @@ class Kingshot(Task):
             phone.tap_xy(*xy)
             time.sleep(1.5)
             return True
-        if which == 5:
+        if which == 6:
             return False
         if closed >= max_popups:
             raise RuntimeError(f"still a pop-up after closing {max_popups}; something is off")
@@ -186,6 +189,10 @@ class Kingshot(Task):
             log.info("closing pop-up %d (X at %s, score %.2f)", closed + 1, m.center, m.score)
             phone.tap_xy(*m.center)
             self._wait_gone_quietly(phone, image=m.text, region=POPUP_X_REGION)
+        elif which == 5:
+            log.info("pop-up %d: 'Quit game?' -> Cancel", closed + 1)
+            phone.tap(text="Cancel", region=QUIT_CANCEL, timeout=5)  # !! never Confirm (it quits)
+            self._wait_gone_quietly(phone, text="Quit game", region=QUIT_TEXT)
         elif which == 4:
             m = phone.last_match
             log.info("closing pop-up %d (%r at %s)", closed + 1, m.text, m.center)

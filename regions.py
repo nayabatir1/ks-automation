@@ -107,6 +107,8 @@ TRAIN_BUTTON = (0.5, 0.86, 0.85, 0.9)  # teal "Train" (reads "Speedups" while tr
 TRAIN_QTY = (0.7, 0.8, 0.79, 0.82)  # quantity box (tap -> a text field with OK)
 TRAIN_TIMER = (0.2, 0.75, 0.8, 0.78)  # while training: "Training  10:36:26" (the status panel)
 TRAIN_QTY_FIELD = (0.8, 0.89, 0.95, 0.93)  # the quantity text field's "OK" (only while it is open)
+QUIT_TEXT = (0.1, 0.38, 0.9, 0.48)  # the game's "Quit game?" prompt (Back on a main screen)
+QUIT_CANCEL = (0.08, 0.5, 0.48, 0.58)  # ...its orange Cancel (left; Confirm on the right quits: never)
 TAP_TO_CLOSE_REGION = (0, 0.5, 1, 1)  # a pop-up's "Tap to close" / "Tap anywhere to exit" (lower half)
 RESOURCE_PACK_ENTER = (0.08, 0.6, 0.5, 0.66)  # launch after an update: "Enter Game" (orange; "Download Now" is right)
 BANK_DAILY_BUTTON = (
@@ -169,9 +171,11 @@ AUTO_JOIN_FLAG = (975, 2200)  # search panel with Terror chosen: the "Auto Join"
 AUTO_JOIN_TITLE = (0.25, 0.18, 0.75, 0.23)  # Auto-Join pop-up: its title
 AUTO_JOIN_STOP = (110, 1860, 440, 1950)  # ...left button: orange "Stop" while it runs, grey when stopped
 AUTO_JOIN_ENABLE = (540, 1860, 960, 1950)  # ...right button: teal "Enable" (stopped) / "Restart" (running)
-AUTO_JOIN_MINUS = (115, 1120, 185, 1185)  # ...Queue Limit "-"
-AUTO_JOIN_TRACK = (260, 1140, 650, 1165)  # ...Queue Limit slider track: green fill grows with the limit (1 = none)
-AUTO_JOIN_CLOSE = (1000, 486)  # ...its X (top right)
+AUTO_JOIN_LIMIT_TITLE = (0, 0.35, 1, 0.6)  # ...the "Queue Limit" header (the pop-up's layout moves with updates)
+AUTO_JOIN_LIMIT_ROW = 111  # ...the slider row is this far below that header (px)
+AUTO_JOIN_MINUS_X = 148  # ...its "-" (left end of the row)
+AUTO_JOIN_TRACK_X = (215, 600)  # ...the slider's track: green fill grows with the limit (1 = none)
+AUTO_JOIN_CLOSE_X = 1000  # ...its X: top right, level with the title
 SEARCH_LEVEL_PLUS = (695, 1965, 765, 2035)  # search panel: the "+" right of the level slider (grey at the top level)
 JOURNEY_PLUS = (936, 172)  # Realm Journey: the green "+" next to the supply counter (top right)
 JOURNEY_CLAIM = (0.65, 0.45, 0.92, 0.49)  # supply box: green "Claim" (grey "Next Supply" timer when not ready)

@@ -133,10 +133,10 @@ def quantity_for(tab: str) -> int:
 
 def open_training(phone: Phone, x: int, y: int) -> None:
     """Tap the building until its menu shows (the first tap may only collect troops), then the menu's Train."""
-    for _ in range(3):
+    for _ in range(5):  # finished troops are collected by the first tap(s); the menu can take a moment
         phone.tap_xy(x, y)
         try:
-            m = phone.wait_for(text="Train", region=TRAIN_LABEL, timeout=2.5)
+            m = phone.wait_for(text="Train", region=TRAIN_LABEL, timeout=4)
             break
         except ElementNotFound:
             continue
