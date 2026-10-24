@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from game import Kingshot
 
 TAP_TO_EXIT = (0.2, 0.84, 0.8, 0.88)  # Rewards screen: "Tap anywhere to exit" (an orange paid Recruit x1 sits above it)
+BLANK_TAP = (540, 250)  # top middle: empty on the Rewards and hero reveal screens (no button there)
 
 
 @job()
@@ -67,13 +68,16 @@ def recruit_free(phone: Phone, log: Logger, kind: str, button: Region, timer: Re
     m = phone.find(text="Free", region=button)
     if m and 35 <= median_hue(phone.last_screen, button) <= 85:
         phone.tap_xy(*m.center)
-        exit_text = phone.wait_for(text="Tap anywhere", region=TAP_TO_EXIT, timeout=15)
-        for _ in range(8):  # taps during the chest animation are ignored: tap again
-            phone.tap_xy(*exit_text.center)
+        time.sleep(2)
+        # the Rewards screen ("Tap anywhere to exit") or a hero reveal (a new hero, or "Hero already owned"; no text
+        # to tap): tap until Hero Recruitment is back. Taps during the chest animation are ignored: tap again.
+        for _ in range(12):
             if phone.exists(text="Recruitment", region=RECRUIT_TITLE, timeout=1.5):
                 break
+            exit_text = phone.find(text="Tap anywhere", region=TAP_TO_EXIT)
+            phone.tap_xy(*(exit_text.center if exit_text else BLANK_TAP))
         else:
-            raise RuntimeError("the Rewards screen didn't close")
+            raise RuntimeError("the Rewards / hero screen didn't close")
         log.info("%s: free recruit done", kind)
     wait = next_free(phone, timer)
     log.info("%s: next free in %s", kind, wait)

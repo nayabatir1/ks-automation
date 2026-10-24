@@ -160,53 +160,66 @@ class Kingshot(Task):
         also: dict[str, Any] | None = None,
     ) -> bool:
         """Wait for a pop-up, the bottom menu, or `also`; close a pop-up if that's what showed.
-        Returns True if a pop-up was closed, False if the menu (or `also`) showed."""
-        targets = [
-            {"image": "close_x", "region": POPUP_X_REGION},  # pop-ups first
-            {"image": "close_x_orange", "region": POPUP_X_REGION},  # the same X on an orange sale pop-up
-            {"text": "Welcome back", "region": WELCOME_TITLE},
-            {"text": "Enter Game", "region": RESOURCE_PACK_ENTER},  # after an update (resource pack box)
-            {"text": "Quit game", "region": QUIT_TEXT},  # a Back too many on a main screen: always Cancel
-            {"text": TAP_TO_CLOSE, "region": TAP_TO_CLOSE_REGION},  # e.g. "Chief Minister" appointment
-            also or {"text": "Backpack", "region": NAV_REGION},
-        ]
-        try:
-            which = phone.wait_any(*targets, timeout=timeout)
-        except ElementNotFound:  # nothing known showed: a pop-up with an X of a new colour / size?
-            xy = any_close_x(phone.screen())
-            if xy is None or closed >= max_popups:
-                raise
-            log.info("closing pop-up %d (an X found by its shape at %s)", closed + 1, xy)
-            phone.tap_xy(*xy)
-            time.sleep(1.5)
-            return True
-        if which == 6:
-            return False
-        if closed >= max_popups:
-            raise RuntimeError(f"still a pop-up after closing {max_popups}; something is off")
-        if which in (0, 1):
+        Returns True if a pop-up was closed, False if the menu (or `also`) showed. If one way of closing fails (e.g.
+        "Quit game" was read but there's no Cancel), the other ways are tried on the same screen."""
+        targets = {
+            "x": {"image": "close_x", "region": POPUP_X_REGION},  # pop-ups first
+            "x_orange": {"image": "close_x_orange", "region": POPUP_X_REGION},  # the same X on an orange sale pop-up
+            "welcome": {"text": "Welcome back", "region": WELCOME_TITLE},
+            "enter_game": {"text": "Enter Game", "region": RESOURCE_PACK_ENTER},  # after an update (resource pack box)
+            "quit": {"text": "Quit game", "region": QUIT_TEXT},  # a Back too many on a main screen: always Cancel
+            "tap_to_close": {"text": TAP_TO_CLOSE, "region": TAP_TO_CLOSE_REGION},  # e.g. "Chief Minister" appointment
+            "main": also or {"text": "Backpack", "region": NAV_REGION},
+        }
+        failed: set[str] = set()
+        while True:
+            keys = [k for k in targets if k not in failed]
+            try:  # after a failed way the pop-up is already there: a short look
+                which = keys[phone.wait_any(*(targets[k] for k in keys), timeout=3 if failed else timeout)]
+            except ElementNotFound:  # nothing known showed: a pop-up with an X of a new colour / size?
+                xy = any_close_x(phone.screen())
+                if xy is None or closed >= max_popups:
+                    raise
+                log.info("closing pop-up %d (an X found by its shape at %s)", closed + 1, xy)
+                phone.tap_xy(*xy)
+                time.sleep(1.5)
+                return True
+            if which == "main":
+                return False
+            if closed >= max_popups:
+                raise RuntimeError(f"still a pop-up after closing {max_popups}; something is off")
+            try:
+                self._close_popup(phone, log, which, closed + 1)
+                return True
+            except ElementNotFound as e:
+                log.info("pop-up %d: %s didn't work (%s); trying the other ways", closed + 1, which, e)
+                failed.add(which)
+                phone.forget_screen()
+
+    def _close_popup(self, phone: Phone, log: Logger, which: str, n: int) -> None:
+        """Close pop-up number n, found by `which` (a key of _close_one_popup's targets; its match is last_match)."""
+        if which in ("x", "x_orange"):
             m = phone.last_match
-            log.info("closing pop-up %d (X at %s, score %.2f)", closed + 1, m.center, m.score)
+            log.info("closing pop-up %d (X at %s, score %.2f)", n, m.center, m.score)
             phone.tap_xy(*m.center)
             self._wait_gone_quietly(phone, image=m.text, region=POPUP_X_REGION)
-        elif which == 5:
-            log.info("pop-up %d: 'Quit game?' -> Cancel", closed + 1)
+        elif which == "quit":
+            log.info("pop-up %d: 'Quit game?' -> Cancel", n)
             phone.tap(text="Cancel", region=QUIT_CANCEL, timeout=5)  # !! never Confirm (it quits)
             self._wait_gone_quietly(phone, text="Quit game", region=QUIT_TEXT)
-        elif which == 4:
+        elif which == "tap_to_close":
             m = phone.last_match
-            log.info("closing pop-up %d (%r at %s)", closed + 1, m.text, m.center)
+            log.info("closing pop-up %d (%r at %s)", n, m.text, m.center)
             phone.tap_xy(*m.center)
             self._wait_gone_quietly(phone, text=TAP_TO_CLOSE, region=TAP_TO_CLOSE_REGION)
-        elif which == 3:  # "Resource pack downloading...": always Enter Game (the user's choice, not Download Now)
-            log.info("pop-up %d: resource pack -> Enter Game", closed + 1)
+        elif which == "enter_game":  # "Resource pack downloading...": always Enter Game (the user's choice)
+            log.info("pop-up %d: resource pack -> Enter Game", n)
             phone.tap_xy(*phone.last_match.center)
             self._wait_gone_quietly(phone, text="Enter Game", region=RESOURCE_PACK_ENTER)
         else:
-            log.info("pop-up %d: Welcome back (offline income) -> Confirm", closed + 1)
+            log.info("pop-up %d: Welcome back (offline income) -> Confirm", n)
             phone.tap(text="Confirm", region=WELCOME_CONFIRM, timeout=5)
             self._wait_gone_quietly(phone, text="Welcome back", region=WELCOME_TITLE)
-        return True
 
     def tap_on_main(
         self, phone: Phone, log: Logger, timeout: float = 15, then: dict[str, Any] | None = None, **target: Any
