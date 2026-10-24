@@ -65,7 +65,6 @@ if TYPE_CHECKING:
 TAB_SWIPE = (900, 200)  # x from / to: one swipe shows the next ~2.5 tabs
 MAX_TAB_PAGES = 8
 BUBBLE_SCALES = (0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.1)  # bubbles are drawn smaller near the town edge
-MAX_VIP_XP_BUYS = 2  # VIP XP (gems) per run at most; one that doesn't go through ends VIP XP for the run
 MAX_MERCHANT_ROUNDS = 300  # buys + refreshes per run, so it can never loop (one stock took ~80 buys)
 SEARCH_SWIPE = (800, 450)
 PRICE_ROWS = (0, 0.32, 1, 0.67)  # merchant: the rows with the 6 boxes (icons and price bars)
@@ -167,7 +166,8 @@ def nomadic_merchant(app: Kingshot, phone: Phone, log: Logger):
     phone.tap(text="Nomadic", region=SHOP_BOTTOM_TABS, timeout=10)
     phone.wait_for(text="Refreshes in", region=MERCHANT_TIMER, timeout=10)
     log.info("nomadic merchant open")
-    bought = refreshes = vip_tries = 0
+    bought = refreshes = 0
+    vip_ok = True  # every VIP XP box is bought (gems); False once a buy doesn't go through (e.g. not enough gems)
     for round_no in range(MAX_MERCHANT_ROUNDS):
         # one screenshot of the price bars, all 6 evaluated; then tap each resource-priced one, but re-check that
         # one bar just before its tap (~0.3 s): a buy restocks and reorders the boxes, so a box can turn into gems
@@ -177,7 +177,11 @@ def nomadic_merchant(app: Kingshot, phone: Phone, log: Logger):
             if all(price_bar(img, xy) for xy in MERCHANT_PRICES):
                 break
             time.sleep(1)
-        boxes = [xy for xy in MERCHANT_PRICES if price_bar(img, xy) and (not gem_price(img, xy) or vip_xp(img, xy))]
+        boxes = [
+            xy
+            for xy in MERCHANT_PRICES
+            if price_bar(img, xy) and (not gem_price(img, xy) or (vip_ok and vip_xp(img, xy)))
+        ]
         if boxes:
             for xy in boxes:
                 phone.forget_screen()
@@ -186,12 +190,11 @@ def nomadic_merchant(app: Kingshot, phone: Phone, log: Logger):
                     phone.tap_xy(*xy)  # resources: bought at once
                     bought += 1
                     time.sleep(0.3)
-                elif price_bar(now, xy) and vip_xp(now, xy) and vip_tries < MAX_VIP_XP_BUYS:
-                    vip_tries += 1
+                elif price_bar(now, xy) and vip_xp(now, xy) and vip_ok:
                     got = buy_vip_xp(phone, log, xy)
                     bought += got
-                    if not got:  # it didn't go through: no more VIP XP this run (it can't loop on a pop-up)
-                        vip_tries = MAX_VIP_XP_BUYS
+                    if not got:  # didn't go through (not enough gems?): its box now counts as a gem box
+                        vip_ok = False
             if round_no % 5 == 4 and not merchant_still_open(phone, log):
                 log.info("merchant: the merchant screen is gone; stopping")
                 break
@@ -201,24 +204,34 @@ def nomadic_merchant(app: Kingshot, phone: Phone, log: Logger):
             break
         m = phone.find(text="Free Refresh", region=MERCHANT_REFRESH)
         if not m or not 35 <= vision.median_hue(phone.last_screen, MERCHANT_REFRESH) <= 85:
-            break  # all boxes cost gems and the refresh isn't free: done
+            log.info("merchant: every box costs gems and the refresh isn't free: done")
+            break
         phone.tap_xy(*m.center)
         refreshes += 1
         time.sleep(1)
+    else:
+        log.warning("merchant: stopped after %d rounds (safety limit)", MAX_MERCHANT_ROUNDS)
     log.info("merchant: %d box(es) bought, %d free refresh(es)", bought, refreshes)
     back_to_main(phone)
 
 
 def merchant_still_open(phone: Phone, log: Logger) -> bool:
-    """The merchant screen is still showing ("Refreshes in"). A fast tap can land on a box that just changed and open
-    its buy dialog over the merchant: Back closes that, then it's checked again. Still gone: a screenshot goes to
-    logs/failures/ to see what it was, and False."""
-    if phone.exists(text="Refreshes in", region=MERCHANT_TIMER, timeout=3):
-        return True
-    phone.back()  # a dialog over the merchant (Back on the merchant itself leaves it: then it's gone either way)
-    time.sleep(1.5)
-    if phone.exists(text="Refreshes in", region=MERCHANT_TIMER, timeout=3):
-        log.info("merchant: closed something that covered it; carrying on")
+    """The merchant screen is still showing ("Refreshes in"). If not, Back is pressed only to close a dialog over it,
+    never on a main screen (Back there opens the game's "Quit game?" prompt; if that shows, Cancel). Still gone: a
+    screenshot goes to logs/failures/ and False."""
+    for _ in range(2):
+        if phone.exists(text="Refreshes in", region=MERCHANT_TIMER, timeout=3):
+            return True
+        if phone.exists(text="Quit game", region=QUIT_TEXT, timeout=1):
+            phone.tap(text="Cancel", region=QUIT_CANCEL, timeout=3)  # never Confirm
+            time.sleep(1)
+            continue
+        if phone.exists(text="Backpack", region=NAV_REGION, timeout=1):  # on the town / world map: the merchant closed
+            break
+        phone.back()  # a dialog over the merchant
+        time.sleep(1.5)
+        log.info("merchant: closed something that covered it")
+    if phone.exists(text="Refreshes in", region=MERCHANT_TIMER, timeout=2):
         return True
     shot = config.FAILURE_DIR / f"merchant_gone_{utcnow():%Y%m%d-%H%M%S}.png"
     shot.parent.mkdir(parents=True, exist_ok=True)
@@ -231,12 +244,18 @@ def buy_vip_xp(phone: Phone, log: Logger, xy: tuple[int, int]) -> int:
     """Gem buys open a "Buy" dialog: check it is VIP XP, then tap its orange gem button. Then a "Purchase" pop-up may
     ask "Confirm to spend N gems ...?": only for the same price, tick "Don't show this again today" (so the next buy
     doesn't ask) and confirm. Returns 1 only once the merchant is back (the buy went through), else 0."""
-    phone.tap_xy(*xy)
-    try:
-        phone.wait_for(text="VIP XP", region=MERCHANT_BUY_ITEM, timeout=4)
-    except ElementNotFound:
+    time.sleep(1)  # the boxes settle after the last buy (a tap while they restock is ignored)
+    for _ in range(2):
+        phone.tap_xy(*xy)
+        if phone.exists(text="VIP XP", region=MERCHANT_BUY_ITEM, timeout=4):
+            break
+        if not phone.exists(text="Refreshes in", region=MERCHANT_TIMER, timeout=1):
+            break  # something else opened: merchant_still_open deals with it
+    else:
+        log.info("merchant: the VIP XP box opened no buy dialog (2 taps); not buying it this round")
+        return 0
+    if not phone.exists(text="VIP XP", region=MERCHANT_BUY_ITEM, timeout=1):
         log.info("merchant: no VIP XP buy dialog; not buying")
-        phone.back()
         return 0
     price = gem_count(phone.read_text(MERCHANT_BUY_BUTTON))
     hue = vision.median_hue(phone.screen(MERCHANT_BUY_BUTTON), MERCHANT_BUY_BUTTON)
@@ -375,6 +394,8 @@ def refines_left(phone: Phone, tries: int = 3) -> int | None:
     return None
 
 
+QUIT_TEXT = (0.1, 0.38, 0.9, 0.48)  # the game's "Quit game?" prompt (Back on a main screen)
+QUIT_CANCEL = (0.08, 0.5, 0.48, 0.58)  # ...its orange Cancel (left; Confirm on the right quits: never)
 DONE_FILE = config.LOG_DIR / "dailies.json"  # the parts done today (UTC): a retry skips them
 PARTS = {
     "gems": gems,
