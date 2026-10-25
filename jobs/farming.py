@@ -77,7 +77,8 @@ TILE_KEYS = ("Mill", "Lumber", "Quarry", "ron Mine")  # in their tiles' names (I
 MARCHES = 6  # march slots ("Marching N/6")
 EVERY = timedelta(hours=7, minutes=30)  # fallback round time when the gathering timers don't read
 WAIT_MAX = timedelta(minutes=20)  # waiting for marches to come home (within the job's 30 min timeout)
-FARMING_FILE = config.LOG_DIR / "farming.json"  # next_refresh: the next regular run; march: last march time (s)
+FARMING_FILE = config.LOG_DIR / "farming.json"  # next_refresh: the next regular run; march: last march time (s);
+# queue_limit_set: the Auto-Join Queue Limit was set this round
 
 
 @dataclass
@@ -98,15 +99,21 @@ DEPLOY_TAP = (822, 2240)
 
 @job(timeout=1800)  # every 7.5 h (the job returns it); waiting for marches to come home can take many minutes
 def farming(app: Kingshot, phone: Phone, log: Logger):
-    """Every run: set_queue_limit, then wait for the marches out (coming home, rallies) to free their slots. The
-    regular run (when the slowest march of the last round is due home) recalls and resends everything. A follow-up
-    run (a resource failed) only sends the resources that aren't out, without recalling. Once all marches gather, the
-    next regular run is booked for the longest gathering time left + the march time back (see plan_next)."""
+    """The regular run (when the slowest march of the last round is due home): set_queue_limit, wait for the marches
+    out (coming home, rallies) to free their slots, recall and resend everything. A follow-up run (marches arrived,
+    or a resource failed) only sends the resources that aren't out, without recalling; it sets the queue limit only
+    if that didn't work this round. Once all marches gather, the next regular run is booked for the longest
+    gathering time left + the march time back (see plan_next)."""
     refresh = refresh_due()
     next_run = [EVERY]
 
     def queue_part(app: Kingshot, phone: Phone, log: Logger) -> None:
+        if not (refresh or app.parts or not load_farming().get("queue_limit_set")):
+            log.info("auto-join: Queue Limit already set this round")
+            return
+        save_farming(queue_limit_set=False)  # stays False if this fails: the next run sets it again
         set_queue_limit(app, phone, log)
+        save_farming(queue_limit_set=True)
 
     def gather_part(app: Kingshot, phone: Phone, log: Logger) -> None:
         next_run[0] = gather_all(app, phone, log, recall=refresh)
