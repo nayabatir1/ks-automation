@@ -68,7 +68,8 @@ TAB_SWIPE = (900, 200)  # x from / to: one swipe shows the next ~2.5 tabs
 MAX_TAB_PAGES = 8
 BUBBLE_SCALES = (0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.1)  # bubbles are drawn smaller near the town edge
 MAX_MERCHANT_ROUNDS = 300  # buys + refreshes per run, so it can never loop (one stock took ~80 buys)
-SEARCH_SWIPE = (800, 450)
+SEARCH_SWIPE = (800, 550)  # x from / to: a small step (~1 tab), every tab is read on the way
+TAB_ROW_END = 3  # swipes in a row that don't move the tab row: its end (one or two can be lost while it settles)
 PRICE_ROWS = (0, 0.32, 1, 0.67)  # merchant: the rows with the 6 boxes (icons and price bars)
 BLANK_SPOT_PX = (540, 300)  # dim area above reward pop-ups (no buttons behind it take the tap)
 
@@ -496,18 +497,18 @@ def open_tab(phone: Phone, name: str) -> bool:
         if not swipe_tabs(phone, TAB_SWIPE[1], TAB_SWIPE[0]):
             break
     stuck = 0
-    for _ in range(MAX_TAB_PAGES * 2):
+    for _ in range(MAX_TAB_PAGES * 4):
         m = phone.find(text=name, region=TAB_NAMES)
         if m:
             phone.tap_xy(max(100, m.center[0]), SHOP_TAB_ROW_Y)
             time.sleep(1)
             phone.forget_screen()
             return True
-        if swipe_tabs(phone, *SEARCH_SWIPE):  # short steps: a tab cut off at the edge can't be read
+        if swipe_tabs(phone, *SEARCH_SWIPE):  # small steps: a tab cut off at the edge can't be read
             stuck = 0
         else:
             stuck += 1
-            if stuck == 2:  # twice: at the end of the row (once can be a swipe lost while the page settles)
+            if stuck == TAB_ROW_END:
                 return False
     return False
 
