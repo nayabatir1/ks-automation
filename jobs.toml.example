@@ -1,0 +1,50 @@
+# Settings, and which jobs and parts run (true = on, false = off). Read on every run: an edit counts from the
+# next minute.
+# A job or part not listed here is on. (run.py --job / --part still run it when you ask for it.)
+# Times are in the job files (jobs/<name>.py); `run.py --timeline` shows what's on and when it runs next.
+
+[settings]
+retry_minutes = 10 # a failed job tries again after this many minutes (also online_rewards'
+# first wait when no chest is listed, and recruit_heroes when a timer is unread)
+
+[jobs]
+troops_training = true            # when the slowest training is done: train the idle barracks / stable / range
+dailies = true                    # 05:35 IST: the parts below
+collect_stamina = true            # 05:35 + 17:30 IST: Gourmet Feast meat
+intel_mission = true              # 05:35 + 17:30 IST: intel missions
+journey_supplies = true           # 05:35 + 17:30 IST: free journey supplies
+claim_rewards = true              # 05:35 + 17:30 IST: the parts below
+arena = true                      # 05:25 IST: the parts below
+alliance_tech_contribution = true # every 250 min: Covenant-Making, bread only
+online_rewards = true             # on the chest timer
+recruit_heroes = true             # on the free-recruit timers
+conquest = true                   # on its timer
+farming = true                    # every 7.5 h: the parts below
+bank = true                       # on the Daily 5% box's countdown
+voyage = true                     # every 8 h while the Wavebound Voyage event runs
+
+[troops_training.quantity] # troops per training, by building (change these when the ratio changes)
+Barracks = 1199
+Stable = 1199
+Range = 1013
+
+[parts.dailies]
+gems = true
+vip = true
+deals = true
+nomadic_merchant = true  # buys VIP XP with gems too
+cassie_recruit = true
+truegold_crucible = true
+
+[parts.claim_rewards]
+mail_rewards = true
+alliance_rewards = true
+help_members = true
+
+[parts.arena]
+pan_extra_intel_mission = true
+arena = true
+
+[parts.farming]
+set_queue_limit = true # Auto-Join: Queue Limit 1
+gather = true          # recall and resend Bread / Wood / Stone / Iron

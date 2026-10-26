@@ -48,7 +48,8 @@ adb shell am force-stop com.run.tower.defense   # close the game
 rm -f .runner.lock                              # only if a later run says "Another run is still in progress"
 ```
 
-Switch one job or one part off (or on again): edit `jobs.toml`, `true` = on, `false` = off. It's read on every
+Switch one job or one part off (or on again): edit `jobs.toml`, `true` = on, `false` = off (it isn't in git; on a
+new setup start from the sample: `cp jobs.toml.example jobs.toml`). It's read on every
 run, so the change counts from the next minute; no restart. Anything not listed there is on.
 
 ```toml
