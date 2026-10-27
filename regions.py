@@ -38,6 +38,7 @@ CHEST_CLAIM = (0.65, 0.72, 1, 0.8)  # conquest screen: the chest's green "Claim"
 IDLE_BOX_TOP = (0.1, 0.27, 0.9, 0.4)  # conquest "Idle Income" box: title + "Idle Time 09:00:00 (Max)"
 IDLE_CLAIM = (0.15, 0.66, 0.85, 0.75)  # ...its big green "Claim" button
 ARENA_MY_ROW = (0, 0.83, 1, 0.91)  # Arena of Glory: your own row above Challenge (rank ... points)
+ARENA_MY_RANK = (0, 0.83, 0.2, 0.91)  # its left end: the rank, or "Unranked"
 ARENA_CHALLENGE = (0.25, 0.92, 0.75, 0.99)  # Arena of Glory: the big teal "Challenge" button (red count badge)
 DAILY_CHALLENGES = (0.15, 0.71, 0.85, 0.76)  # Challenge List: "Daily challenges: N" (+ next to it = gems: never)
 FREE_REFRESH = (0.25, 0.76, 0.75, 0.81)  # Challenge List: green "Free Refresh" button

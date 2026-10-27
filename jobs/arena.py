@@ -21,6 +21,7 @@ from core.task import job, run_parts
 from jobs.farming import to_world_map
 from regions import (
     ARENA_CHALLENGE,
+    ARENA_MY_RANK,
     ARENA_MY_ROW,
     COMPASS_BUTTON,
     DAILY_CHALLENGES,
@@ -290,7 +291,10 @@ def my_standing(phone: Phone) -> tuple[int | None, int]:
 
 def read_standing(img: Image) -> tuple[int | None, int]:
     """(rank, points) from your own row: the rank is the number at the far left (None when it says "Unranked"),
-    the points the right-most number. Name and power in between are ignored."""
+    the points the right-most number. Name and power in between are ignored.
+    "Unranked" (the weekly reset) counts as 0 points: the white points on its tan row don't OCR."""
+    if vision.find_text(img, "Unranked", ARENA_MY_RANK):
+        return None, 0
     nums = []
     for m in vision.ocr_lines(img, ARENA_MY_ROW):
         for word in m.text.split():
