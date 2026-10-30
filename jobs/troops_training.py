@@ -19,7 +19,7 @@ from core.task import job
 from core.timeparse import parse_duration
 from regions import (
     TRAIN_BUTTON,
-    TRAIN_LABEL,
+    TRAIN_ICON,
     TRAIN_QTY,
     TRAIN_QTY_FIELD,
     TRAIN_TABS,
@@ -136,13 +136,13 @@ def open_training(phone: Phone, x: int, y: int) -> None:
     for _ in range(5):  # finished troops are collected by the first tap(s); the menu can take a moment
         phone.tap_xy(x, y)
         try:
-            m = phone.wait_for(text="Train", region=TRAIN_LABEL, timeout=4)
+            m = phone.wait_for(image="train_icon", region=TRAIN_ICON, timeout=4)  # OCR often misses "Train"
             break
         except ElementNotFound:
             continue
     else:
         raise ElementNotFound("the Barracks menu (Details / Upgrade / Train) didn't show")
-    phone.tap_xy(m.center[0], m.center[1] - 88)  # the hexagon icon above its label
+    phone.tap_xy(*m.center)
     phone.wait_for(text=TROOP_TITLE, region=TRAIN_TITLE, timeout=10)
 
 
