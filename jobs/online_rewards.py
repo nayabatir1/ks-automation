@@ -145,6 +145,22 @@ def read_countdown(phone: Phone, log: Logger) -> timedelta | None:
 def open_daily_tab(app: Kingshot, phone: Phone, log: Logger) -> None:
     """World map -> side panel -> its Daily tab (Online Rewards, Realm Journey, Journey Supplies, ...).
     Used by online_rewards and journey_supplies."""
+    open_side_panel(app, phone, log)
+
+    # 3. the Daily tab (its label doesn't OCR: tapped by position; the chosen tab is the bright one)
+    for _ in range(3):
+        if daily_tab_chosen(phone.screen()):
+            break
+        phone.tap_xy(*SIDE_PANEL_DAILY_TAB)
+        time.sleep(1.5)
+        phone.forget_screen()
+    else:
+        raise ElementNotFound("the side panel's Daily tab didn't open")
+    log.info("daily tab open")
+
+
+def open_side_panel(app: Kingshot, phone: Phone, log: Logger) -> None:
+    """World map -> side panel (tabs Town / Wilderness / Daily). Used by open_daily_tab and troops_training."""
     # 1. World button (Q4) -> world map; the button then reads "Town". Skip if already there.
     if phone.exists(text="Town", region=NAV_REGION):
         log.info("already on the world map")
@@ -166,17 +182,6 @@ def open_daily_tab(app: Kingshot, phone: Phone, log: Logger) -> None:
         phone.tap(image="side_tab", region=LEFT_MID, timeout=5)
         phone.wait_for(text="Wilderness", region=SIDE_PANEL, timeout=10)
         log.info("side panel open")
-
-    # 3. the Daily tab (its label doesn't OCR: tapped by position; the chosen tab is the bright one)
-    for _ in range(3):
-        if daily_tab_chosen(phone.screen()):
-            break
-        phone.tap_xy(*SIDE_PANEL_DAILY_TAB)
-        time.sleep(1.5)
-        phone.forget_screen()
-    else:
-        raise ElementNotFound("the side panel's Daily tab didn't open")
-    log.info("daily tab open")
 
 
 def find_daily_row(phone: Phone, title: str, max_swipes: int = 14) -> vision.Match | None:

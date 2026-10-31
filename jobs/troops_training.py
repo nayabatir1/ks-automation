@@ -1,6 +1,7 @@
 """Kingshot job: troops training. Runs again when the slowest of the three trainings is done.
 
-Town: Barracks -> tap twice (the first tap collects finished troops) -> menu "Train" -> training page. Its bottom
+World map -> side panel -> Town tab (preselected) -> Troops Training: Infantry's green arrow -> the town, centred
+on the Barracks with its menu open -> "Train" (always at the same spot) -> training page. Its bottom
 tabs switch between Barracks / Stable / Range; on each: its quantity (jobs.toml [troops_training.quantity]) -> Train. A tab that is still
 training shows "Speedups" instead of Train and is left alone.
 !! Never Finish (gems) or Speedups.
@@ -14,12 +15,14 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from core import switches, vision
-from core.phone import ElementNotFound
 from core.task import job
 from core.timeparse import parse_duration
+from jobs.online_rewards import ROW_BUTTON_X, open_side_panel
 from regions import (
+    BARRACKS_NAME,
+    SIDE_PANEL,
+    SIDE_PANEL_TOWN_TAB,
     TRAIN_BUTTON,
-    TRAIN_ICON,
     TRAIN_QTY,
     TRAIN_QTY_FIELD,
     TRAIN_TABS,
@@ -27,7 +30,6 @@ from regions import (
     TRAIN_TITLE,
     TRAIN_XI,
 )
-from town import drag, find_building, go_to_building
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -37,32 +39,20 @@ if TYPE_CHECKING:
 
 NO_TIMER_WAIT = timedelta(hours=1)  # no countdown read at all: look again this soon
 TROOP_KIND = {"Barracks": "Infantry", "Stable": "Cavalry", "Range": "Archers"}
-TROOP_TITLE = re.compile(r"Apex|Truegold")  # training page title: "Apex Infantry", "Truegold Archers", ...
+# training page title: "Apex Infantry", "Truegold Archers", ... (the helmet over the "d" can hide it: "Truegol")
+TROOP_TITLE = re.compile(r"Apex|Truegol")
 TROOPS_QUANTITY = {  # defaults; jobs.toml [troops_training.quantity] overrides them
     "Barracks": 950,
     "Stable": 950,
     "Range": 820,
 }
 QTY_BOX = (810, 1892)  # the quantity box
+MENU_TRAIN = (722, 1316)  # the Barracks menu's Train, with the Barracks centred by the side panel's arrow
 
 
 @job(priority=90)  # when the slowest of the three trainings is done (the job returns it)
 def troops_training(app: Kingshot, phone: Phone, log: Logger):
-    x, y = go_to_building(
-        phone,
-        log,
-        "Barracks",
-        view=app.town_from_launch(phone, log),
-        unblock=lambda: app.close_popups(phone, log, timeout=5),
-    )  # e.g. a late "Welcome back!"
-    if abs(x - 540) > 100:  # its tap menu reaches ~300 px right: centre it first
-        drag(phone, x - 540, 0)
-        m = find_building(phone, "Barracks")
-        if not m:
-            raise ElementNotFound("lost the Barracks after centring it")
-        x, y = m.center
-    app.town_view = None
-    open_training(phone, x, y)
+    open_training(app, phone, log)
     log.info("training page open")
 
     waits = []
@@ -77,7 +67,7 @@ def troops_training(app: Kingshot, phone: Phone, log: Logger):
         elif phone.exists(text="Train", region=TRAIN_BUTTON):
             tier = pick_xi(phone)  # the top tier when it's unlocked (in colour), else the page's own choice
             title = phone.read_text(TRAIN_TITLE)  # over the 3D troop: only its tier word reads reliably
-            troop = f"{'Truegold' if 'Truegold' in title else 'Apex'} {TROOP_KIND[tab]}"
+            troop = f"{'Truegold' if 'Truegol' in title else 'Apex'} {TROOP_KIND[tab]}"
             set_quantity(phone, quantity)
             phone.tap(text="Train", region=TRAIN_BUTTON, timeout=5)
             time.sleep(1.5)
@@ -116,7 +106,7 @@ def pick_xi(phone: Phone) -> bool:
         return False
     x1, y1, x2, y2 = TRAIN_XI
     phone.tap_xy((x1 + x2) // 2, (y1 + y2) // 2)
-    phone.wait_for(text="Truegold", region=TRAIN_TITLE, timeout=5)  # the page now shows the XI troop
+    phone.wait_for(text="Truegol", region=TRAIN_TITLE, timeout=5)  # the page now shows the XI troop
     time.sleep(1)
     phone.forget_screen()
     return True
@@ -131,18 +121,18 @@ def quantity_for(tab: str) -> int:
         return TROOPS_QUANTITY[tab]
 
 
-def open_training(phone: Phone, x: int, y: int) -> None:
-    """Tap the building until its menu shows (the first tap may only collect troops), then the menu's Train."""
-    for _ in range(5):  # finished troops are collected by the first tap(s); the menu can take a moment
-        phone.tap_xy(x, y)
-        try:
-            m = phone.wait_for(image="train_icon", region=TRAIN_ICON, timeout=4)  # OCR often misses "Train"
-            break
-        except ElementNotFound:
-            continue
-    else:
-        raise ElementNotFound("the Barracks menu (Details / Upgrade / Train) didn't show")
-    phone.tap_xy(*m.center)
+def open_training(app: Kingshot, phone: Phone, log: Logger) -> None:
+    """World map -> side panel -> Town tab -> Infantry's green arrow -> Barracks menu -> Train -> training page."""
+    open_side_panel(app, phone, log)
+    if not phone.exists(text="Troops Training", region=SIDE_PANEL, timeout=2):  # the Town tab is preselected
+        phone.tap_xy(*SIDE_PANEL_TOWN_TAB)
+        phone.wait_for(text="Troops Training", region=SIDE_PANEL, timeout=5)
+    m = phone.wait_for(text="Infantry", region=SIDE_PANEL, timeout=5)
+    phone.tap_xy(ROW_BUTTON_X, m.center[1] + 20)  # the row's green arrow (right end)
+    app.town_view = None  # the town is now centred on the Barracks
+    phone.wait_for(text="Barracks", region=BARRACKS_NAME, timeout=10)
+    time.sleep(1)  # the menu pops up after the name
+    phone.tap_xy(*MENU_TRAIN)  # highlighted (a hand points at it): neither its icon nor its label read reliably
     phone.wait_for(text=TROOP_TITLE, region=TRAIN_TITLE, timeout=10)
 
 
