@@ -21,6 +21,7 @@ from core import vision
 from core.phone import ElementNotFound
 from core.schedule import utcnow
 from core.task import job
+from core.timeparse import parse_duration
 from core.vision import median_hue
 from regions import (
     BLANK_SPOT,
@@ -105,24 +106,40 @@ def online_rewards(app: Kingshot, phone: Phone, log: Logger):
 
     # 6. record when the next chest is ready, then tap a blank spot: that closes the chest screen and the panel
     # (drawn a moment after "Next Chest Ready" shows; a reading only counts when the next one agrees, within a few
-    # seconds: a single read once dropped a digit, 0:07:59 for 03:07:59)
-    wait, last = None, None
-    for _ in range(10):
-        now = phone.read_duration(region=CHEST_TIMER)
-        if now is not None and last is not None and abs((last - now).total_seconds()) <= 5:
-            wait = now
-            break
-        last = now
-        time.sleep(0.5)
-        phone.forget_screen()
+    # seconds: a single read once dropped a digit, 0:07:59 for 03:07:59). If they never agree, wait for the screen
+    # to settle and try once more; still nothing: the chest is claimed anyway, so check again in RETRY_MINUTES
+    # (then the usual 10 / 20 / 40 min checks) instead of failing.
+    wait = read_countdown(phone, log)
     if wait is None:
-        raise RuntimeError("could not read the 'Next Chest Ready In' countdown (two readings never agreed)")
+        time.sleep(2)
+        wait = read_countdown(phone, log)
     save_state(misses=0)
-    log.info("next chest in %s", wait)
     phone.tap_xy(*BLANK_SPOT)
     phone.wait_gone(text="Next Chest Ready", region=CHEST_TIMER, timeout=10)
     close_panel(phone)  # usually already closed
+    if wait is None:
+        wait = timedelta(minutes=config.RETRY_MINUTES)
+        log.warning("couldn't read the 'Next Chest Ready In' countdown; checking again in %s", wait)
+        return wait
+    log.info("next chest in %s", wait)
     return wait + timedelta(seconds=10)  # a little after it's ready
+
+
+def read_countdown(phone: Phone, log: Logger) -> timedelta | None:
+    """The chest screen's countdown, once two readings in a row agree (within a few seconds); None if they never
+    do, with every reading logged."""
+    readings, last = [], None
+    for _ in range(10):
+        phone.forget_screen()
+        text = phone.read_text(region=CHEST_TIMER)
+        now = parse_duration(text)
+        if now is not None and last is not None and abs((last - now).total_seconds()) <= 5:
+            return now
+        readings.append(text.replace("\n", " | "))
+        last = now
+        time.sleep(0.5)
+    log.info("countdown readings never agreed: %s", readings)
+    return None
 
 
 def open_daily_tab(app: Kingshot, phone: Phone, log: Logger) -> None:
