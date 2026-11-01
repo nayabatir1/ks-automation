@@ -48,6 +48,7 @@ TROOPS_QUANTITY = {  # defaults; jobs.toml [troops_training.quantity] overrides 
 }
 QTY_BOX = (810, 1892)  # the quantity box
 MENU_TRAIN = (722, 1316)  # the Barracks menu's Train, with the Barracks centred by the side panel's arrow
+BARRACKS_XY = (527, 1053)  # the Barracks itself, centred the same way
 
 
 @job(priority=90)  # when the slowest of the three trainings is done (the job returns it)
@@ -130,7 +131,11 @@ def open_training(app: Kingshot, phone: Phone, log: Logger) -> None:
     m = phone.wait_for(text="Infantry", region=SIDE_PANEL, timeout=5)
     phone.tap_xy(ROW_BUTTON_X, m.center[1] + 20)  # the row's green arrow (right end)
     app.town_view = None  # the town is now centred on the Barracks
-    phone.wait_for(text="Barracks", region=BARRACKS_NAME, timeout=10)
+    # idle: its menu is open (name shown); troops ready: a bubble over it instead, no name or menu: tap the building
+    # once (collects them), then its menu shows
+    if not phone.exists(text="Barracks", region=BARRACKS_NAME, timeout=5):
+        phone.tap_xy(*BARRACKS_XY)
+        phone.wait_for(text="Barracks", region=BARRACKS_NAME, timeout=10)
     time.sleep(1)  # the menu pops up after the name
     phone.tap_xy(*MENU_TRAIN)  # highlighted (a hand points at it): neither its icon nor its label read reliably
     phone.wait_for(text=TROOP_TITLE, region=TRAIN_TITLE, timeout=10)
