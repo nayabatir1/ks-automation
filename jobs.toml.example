@@ -13,6 +13,7 @@ dailies = true                    # 05:35 IST: the parts below
 collect_stamina = true            # 05:35 + 17:30 IST: Gourmet Feast meat
 intel_mission = true              # 05:35 + 17:30 IST: intel missions
 journey_supplies = true           # 05:35 + 17:30 IST: free journey supplies
+pet_adventure = true              # 05:35 + 17:30 IST: Ally Treasure + hunt rewards, Hunt All
 claim_rewards = true              # 05:35 + 17:30 IST: the parts below
 arena = true                      # 05:25 IST: the parts below
 alliance_tech_contribution = true # every 250 min: Covenant-Making, bread only
