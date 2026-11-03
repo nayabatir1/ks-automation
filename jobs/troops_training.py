@@ -132,10 +132,13 @@ def open_training(app: Kingshot, phone: Phone, log: Logger) -> None:
     phone.tap_xy(ROW_BUTTON_X, m.center[1] + 20)  # the row's green arrow (right end)
     app.town_view = None  # the town is now centred on the Barracks
     # idle: its menu is open (name shown); troops ready: a bubble over it instead, no name or menu: tap the building
-    # once (collects them), then its menu shows
-    if not phone.exists(text="Barracks", region=BARRACKS_NAME, timeout=5):
+    # (the first tap only collects them, the next opens its menu)
+    for _ in range(3):
+        if phone.exists(text="Barracks", region=BARRACKS_NAME, timeout=5):
+            break
         phone.tap_xy(*BARRACKS_XY)
-        phone.wait_for(text="Barracks", region=BARRACKS_NAME, timeout=10)
+    else:
+        phone.wait_for(text="Barracks", region=BARRACKS_NAME, timeout=5)
     time.sleep(1)  # the menu pops up after the name
     phone.tap_xy(*MENU_TRAIN)  # highlighted (a hand points at it): neither its icon nor its label read reliably
     phone.wait_for(text=TROOP_TITLE, region=TRAIN_TITLE, timeout=10)
