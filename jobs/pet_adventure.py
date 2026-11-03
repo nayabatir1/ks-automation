@@ -62,7 +62,7 @@ def pet_adventure(app: Kingshot, phone: Phone, log: Logger):
     # finished hunts, then send the pets out again
     if claim(phone, log, "Claim All", PET_BUTTON, GREEN):
         log.info("hunt rewards claimed")
-    if press(phone, "Hunt All", PET_BUTTON, TEAL):
+    if press(phone, "Hunt All", PET_BUTTON, TEAL, timeout=6):  # it shows a moment after the claim
         time.sleep(2)
         log.info("hunt all: pets sent out")
     else:
@@ -72,17 +72,20 @@ def pet_adventure(app: Kingshot, phone: Phone, log: Logger):
     time.sleep(1.5)
 
 
-def press(phone: Phone, label: str, region, hues: tuple[int, int]) -> bool:
-    """Tap the button only when it's there and in its colour."""
-    phone.forget_screen()
-    m = phone.find(text=label, region=region)
-    if not m:
-        return False
-    box = (m.x - 60, m.y - 20, m.x + m.w + 60, m.y + m.h + 20)
-    if not hues[0] <= vision.median_hue(phone.last_screen, box) <= hues[1]:
-        return False
-    phone.tap_xy(*m.center)
-    return True
+def press(phone: Phone, label: str, region, hues: tuple[int, int], timeout: float = 0) -> bool:
+    """Tap the button only when it's there and in its colour; look again until `timeout` (s) is up."""
+    end = time.monotonic() + timeout
+    while True:
+        phone.forget_screen()
+        m = phone.find(text=label, region=region)
+        if m:
+            box = (m.x - 60, m.y - 20, m.x + m.w + 60, m.y + m.h + 20)
+            if hues[0] <= vision.median_hue(phone.last_screen, box) <= hues[1]:
+                phone.tap_xy(*m.center)
+                return True
+        if time.monotonic() >= end:
+            return False
+        time.sleep(1)
 
 
 def claim(phone: Phone, log: Logger, label: str, region, hues: tuple[int, int]) -> bool:
