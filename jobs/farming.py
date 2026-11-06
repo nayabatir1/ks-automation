@@ -76,7 +76,7 @@ RESOURCES = ("Bread", "Wood", "Stone", "Iron")
 TILE_KEYS = ("Mill", "Lumber", "Quarry", "ron Mine")  # in their tiles' names (Idle Mill / Lumberyard / ...)
 MARCHES = 6  # march slots ("Marching N/6")
 EVERY = timedelta(hours=7, minutes=30)  # fallback round time when the gathering timers don't read
-WAIT_MAX = timedelta(minutes=20)  # waiting for marches to come home (within the job's 30 min timeout)
+HOME_MARGIN = timedelta(seconds=15)  # marches out: come back this long after the slowest timer runs out
 FARMING_FILE = config.LOG_DIR / "farming.json"  # next_refresh: the next regular run; march: last march time (s);
 # queue_limit_set: the Auto-Join Queue Limit was set this round
 
@@ -261,16 +261,18 @@ def queue_limit_is_1(phone: Phone) -> tuple[bool, int]:
 def gather_all(app: Kingshot, phone: Phone, log: Logger, recall: bool = True) -> timedelta:
     """recall=True (the regular run): recall every unsecured gathering march (map's Marching list; secured ones,
     rallies and other marches stay). Then the side panel's Wilderness tab (March Queue: one row per march slot) is
-    watched until the marches out are home (see wait_for_marches). Then each resource that isn't out is sent into
-    the "Idle" slots. A resource that fails is tried again after RETRY_MINUTES (only that one).
+    read: marches still out -> the job ends and comes back when the slowest is home (see marches_home; the game is
+    closed meanwhile). Else each resource that isn't out is sent into the "Idle" slots. A resource that fails is tried again after RETRY_MINUTES (only that one).
     Returns when the job should run next."""
     to_world_map(phone)
     if recall:
         recall_gathering(phone, log)
         save_farming(next_refresh=(utcnow() + EVERY).isoformat())  # for now; plan_next books the real time
-    slots = wait_for_marches(phone, log, recall)
-    if slots is None:  # still out after WAIT_MAX: the job comes back later (the game is closed meanwhile)
-        return timedelta(minutes=config.RETRY_MINUTES)
+    slots = marches_home(phone, log, recall)
+    if isinstance(slots, timedelta):  # marches still out: come back when they're home
+        if recall:  # the comeback is this round's regular run again (it recalls what has reached its tile by then)
+            save_farming(next_refresh=(utcnow() + slots).isoformat())
+        return slots
     out = {k for q in slots if (k := q.kind)}
     todo = [k for k in RESOURCES if k not in out]
     free = sum(q.idle for q in slots)
@@ -293,34 +295,29 @@ def gather_all(app: Kingshot, phone: Phone, log: Logger, recall: bool = True) ->
     return plan_next(phone, log, sent=bool(todo[:free]))
 
 
-def wait_for_marches(phone: Phone, log: Logger, recall: bool) -> list[Slot] | None:
-    """Watch the March Queue until nothing is coming home, no rally holds a slot a resource needs, and (regular run)
-    none of ours is still on its way to its tile (it's recalled once it gathers). A follow-up run doesn't wait for
-    ours on their way: they're the ones it sent. Looks again when the longest timer runs out (30 s at most).
-    Returns the last March Queue, or None if marches are still out after WAIT_MAX (the job's time is up)."""
-    end = time.time() + WAIT_MAX.total_seconds()
-    while True:
-        on_world_map(phone)
-        slots = march_queue(phone, log)
-        close_panel(phone)
-        out = {k for q in slots if (k := q.kind)}
-        todo = [k for k in RESOURCES if k not in out]
-        moving = [q for q in slots if q.returning or (recall and q.on_way)]
-        short = len(todo) - sum(q.idle for q in slots)  # slots a resource needs that a rally (or anything) holds
-        if not moving and short <= 0:
-            return slots
-        if time.time() > end:
-            log.info("marches still out after %s; trying again in %d min", WAIT_MAX, config.RETRY_MINUTES)
-            return None
-        timers = [q.timer for q in moving if q.timer]
-        wait = min(max(timers).total_seconds() + 5, 30) if timers else 30
-        log.info(
-            "%d march(es) coming home or on their way, %d slot(s) short; looking again in %d s",
-            len(moving),
-            max(short, 0),
-            wait,
-        )
-        time.sleep(wait)
+def marches_home(phone: Phone, log: Logger, recall: bool) -> list[Slot] | timedelta:
+    """Read the March Queue once. Nothing coming home, no rally holding a slot a resource needs and (regular run)
+    none of ours still on its way to its tile: the March Queue. Else how long until the slowest of them is done
+    (+ HOME_MARGIN; RETRY_MINUTES when no timer reads): the job comes back then instead of waiting with the game
+    open. A follow-up run doesn't wait for ours on their way: they're the ones it sent."""
+    on_world_map(phone)
+    slots = march_queue(phone, log)
+    close_panel(phone)
+    out = {k for q in slots if (k := q.kind)}
+    todo = [k for k in RESOURCES if k not in out]
+    moving = [q for q in slots if q.returning or (recall and q.on_way)]
+    short = len(todo) - sum(q.idle for q in slots)  # slots a resource needs that a rally (or anything) holds
+    if not moving and short <= 0:
+        return slots
+    timers = [q.timer for q in moving if q.timer]
+    wait = max(timers) + HOME_MARGIN if timers else timedelta(minutes=config.RETRY_MINUTES)
+    log.info(
+        "%d march(es) coming home or on their way, %d slot(s) short; closing the game, back in %s",
+        len(moving),
+        max(short, 0),
+        wait,
+    )
+    return wait
 
 
 def plan_next(phone: Phone, log: Logger, sent: bool) -> timedelta:
