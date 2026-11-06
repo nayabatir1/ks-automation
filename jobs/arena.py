@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from game import Kingshot
 
 
-@job(schedule=At("23:55", tz="UTC"))
+@job(schedule=At("23:55", tz="UTC"), retry_minutes=1)  # failed: again on the next tick, before the reset
 def arena(app: Kingshot, phone: Phone, log: Logger):
     run_parts(app, phone, log, {"pan_extra_intel_mission": pan_extra_intel_mission, "arena": fight_arena})
 
@@ -237,7 +237,7 @@ def open_challenge_list(phone: Phone) -> None:
 def fight(phone: Phone, log: Logger, y: int) -> None:
     """Swords -> Squad Settings -> Fight -> pause -> Retreat -> result -> tap anywhere to exit."""
     tap_swords(phone, y)
-    phone.tap(text="Fight", region=FIGHT_BUTTON, timeout=15)  # Squad Settings: green Fight, bottom right
+    start_battle(phone, log)
     pause_and_retreat(phone)
     result = phone.wait_for(text="Tap anywhere", region=(0.15, 0.93, 0.85, 0.99), timeout=15)
     outcome = phone.find(
@@ -246,6 +246,19 @@ def fight(phone: Phone, log: Logger, y: int) -> None:
     log.info("fight over: %s", outcome.text if outcome else "result shown")
     phone.tap_xy(*result.center)  # "Tap anywhere to exit"
     phone.wait_gone(text="Tap anywhere", region=(0.15, 0.93, 0.85, 0.99), timeout=10)
+
+
+def start_battle(phone: Phone, log: Logger) -> None:
+    """Squad Settings: green Fight (bottom right) -> the battle (its pause button shows). A tap while the screen is
+    still settling in is ignored: then Fight is still there, tap it again."""
+    phone.tap(text="Fight", region=FIGHT_BUTTON, timeout=15)
+    for _ in range(3):
+        if phone.exists(image="battle_pause", region=PAUSE_AREA, timeout=8):
+            return
+        if not phone.exists(text="Fight", region=FIGHT_BUTTON, timeout=1):
+            return  # not on Squad Settings any more: pause_and_retreat waits for the battle
+        log.info("Fight tap ignored; tapping it again")
+        phone.tap(text="Fight", region=FIGHT_BUTTON, timeout=3)
 
 
 def pause_and_retreat(phone: Phone) -> None:
