@@ -18,7 +18,7 @@ import numpy as np
 
 import config
 from core import vision
-from core.phone import ElementNotFound
+from core.phone import ElementNotFound, PhoneError
 from core.schedule import utcnow
 from core.task import job
 from core.timeparse import parse_duration
@@ -79,8 +79,14 @@ def close_panel(phone: Phone) -> None:
     Closing the chest screen with a tap outside the panel can close the panel too: then there's nothing to do."""
     if not phone.exists(text="Wilderness", region=SIDE_PANEL, timeout=1):
         return
-    phone.tap(image="side_tab_close", region=PANEL_TAB, timeout=5)
-    phone.wait_gone(text="Wilderness", region=SIDE_PANEL, timeout=5)
+    for _ in range(3):  # a tap can be ignored (the panel stays open): tap "<" again
+        phone.tap(image="side_tab_close", region=PANEL_TAB, timeout=5)
+        try:
+            phone.wait_gone(text="Wilderness", region=SIDE_PANEL, timeout=5)
+            return
+        except PhoneError:
+            pass
+    raise PhoneError("the side panel didn't close")
 
 
 @job()
