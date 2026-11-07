@@ -38,6 +38,7 @@ log = logging.getLogger("phone")
 
 KEY_HOME, KEY_BACK, KEY_ENTER, KEY_MENU = 3, 4, 66, 82
 KEY_SLEEP, KEY_WAKEUP = 223, 224
+TAP_HOLD = 0.08  # s the finger stays down on every tap (an instant down+up can fall in one game frame and be missed)
 REUSE_SECONDS = 1.0  # a screenshot this fresh (and with no input since) may be reused by the next check
 
 
@@ -459,8 +460,7 @@ class Phone:
         self._screen_changed()
         x, y = self._xy(x, y)
         log.debug("tap %d,%d", x, y)
-        if not self._monkey_cmd(f"tap {x} {y}"):
-            self.shell(f"input tap {x} {y}")
+        self._press(x, y, TAP_HOLD)
         time.sleep(pause)
 
     def tap(
@@ -493,6 +493,10 @@ class Phone:
         self._screen_changed()
         x, y = self._xy(x, y)
         log.debug("hold %d,%d for %ss", x, y, seconds)
+        self._press(x, y, seconds)
+
+    def _press(self, x: int, y: int, seconds: float) -> None:
+        """Every touch: finger down at (x, y), held `seconds`, then up (taps hold TAP_HOLD)."""
         if self._monkey_cmd(f"touch down {x} {y}"):
             try:
                 time.sleep(seconds)
