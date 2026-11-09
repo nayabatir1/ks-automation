@@ -1,8 +1,9 @@
 """Kingshot job: claim journey supplies. 00:05 + 12:00 UTC (5:35am + 5:30pm IST), with intel_mission.
 
 The free claim opens at 08:00 and 16:00 UTC; each run comes after one of those, so it finds one to claim.
-World map -> side panel -> Daily tab -> Realm Journey's arrow -> "+" by the supply counter -> green "Claim"
-(10 supplies) if it's green. !! Never the orange gem button ("Spend Gems to buy").
+World map -> side panel -> Daily tab -> "Journey Supplies" row's green tick -> the Lostlands / Realm Journey
+crossroads -> the supply counter (top, red dot) -> supply box: green "Claim" (10 supplies) if it's green.
+No such row, or no green tick: nothing to claim now. !! Never the orange gem button ("Spend Gems to buy").
 """
 
 from __future__ import annotations
@@ -14,12 +15,11 @@ from core import vision
 from core.phone import ElementNotFound
 from core.schedule import At
 from core.task import job
-from jobs.online_rewards import ROW_BUTTON_X, close_panel, open_daily_tab
+from jobs.online_rewards import ROW_BUTTON_X, close_panel, find_daily_row, open_daily_tab
 from regions import (
     JOURNEY_CLAIM,
     JOURNEY_CLOSE,
-    JOURNEY_PLUS,
-    SIDE_PANEL,
+    JOURNEY_SUPPLIES,
 )
 
 if TYPE_CHECKING:
@@ -32,15 +32,21 @@ if TYPE_CHECKING:
 @job(schedule=At("00:05", "12:00", tz="UTC"), priority=112)  # 5:35am + 5:30pm IST, after intel_mission (110)
 def journey_supplies(app: Kingshot, phone: Phone, log: Logger):
     open_daily_tab(app, phone, log)
-    row = phone.wait_for(text="Realm Journey", region=SIDE_PANEL, timeout=5)
-    arrow = (ROW_BUTTON_X, row.center[1] + 23)
-    box = (arrow[0] - 35, arrow[1] - 30, arrow[0] + 35, arrow[1] + 30)
+    row = find_daily_row(phone, "Journey Supplies")
+    if not row:
+        log.info("journey supplies: no Journey Supplies row in the Daily tab (nothing to claim now)")
+        close_panel(phone)
+        return
+    tick = (ROW_BUTTON_X, row.center[1] + 23)
+    box = (tick[0] - 35, tick[1] - 30, tick[0] + 35, tick[1] + 30)
     hue = vision.median_hue(phone.last_screen, box)
-    if not 85 <= hue <= 100:  # the teal arrow ~92 (a green tick ~79)
-        raise RuntimeError(f"Realm Journey: no teal arrow at {arrow} (hue {hue:.0f}); not tapping")
-    phone.tap_xy(*arrow)
+    if not 65 <= hue <= 86:  # the green tick ~79 ("Claim for Free")
+        log.info("journey supplies: no green tick (hue %.0f); nothing to claim now", hue)
+        close_panel(phone)
+        return
+    phone.tap_xy(*tick)  # -> the Lostlands / Realm Journey crossroads
     time.sleep(3)
-    phone.tap_xy(*JOURNEY_PLUS)
+    phone.tap_xy(*JOURNEY_SUPPLIES)
     try:
         m = phone.wait_for(text="Claim", region=JOURNEY_CLAIM, timeout=5)
     except ElementNotFound:
@@ -56,5 +62,5 @@ def journey_supplies(app: Kingshot, phone: Phone, log: Logger):
             log.info("journey supplies: Claim isn't green; not tapping")
     phone.tap_xy(*JOURNEY_CLOSE)  # close the supply box
     time.sleep(1)
-    phone.back()  # Realm Journey -> world map
+    phone.back()  # crossroads -> world map
     close_panel(phone)  # if the side panel is still open

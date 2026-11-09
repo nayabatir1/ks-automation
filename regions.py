@@ -179,7 +179,7 @@ AUTO_JOIN_MINUS_X = 148  # ...its "-" (left end of the row)
 AUTO_JOIN_TRACK_X = (215, 600)  # ...the slider's track: green fill grows with the limit (1 = none)
 AUTO_JOIN_CLOSE_X = 1000  # ...its X: top right, level with the title
 SEARCH_LEVEL_PLUS = (695, 1965, 765, 2035)  # search panel: the "+" right of the level slider (grey at the top level)
-JOURNEY_PLUS = (936, 172)  # Realm Journey: the green "+" next to the supply counter (top right)
+JOURNEY_SUPPLIES = (800, 173)  # Lostlands / Realm Journey crossroads: the supply counter (top, red dot)
 JOURNEY_CLAIM = (0.65, 0.45, 0.92, 0.49)  # supply box: green "Claim" (grey "Next Supply" timer when not ready)
 JOURNEY_CLOSE = (540, 2050)  # supply box: "Tap any blank space to close"
 PET_TITLE = (0.1, 0.04, 0.6, 0.09)  # Pet Adventure: its title (top left)
