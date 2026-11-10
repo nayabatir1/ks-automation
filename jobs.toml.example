@@ -24,7 +24,7 @@ farming = true                    # every 7.5 h: the parts below
 bank = true                       # on the Daily 5% box's countdown
 voyage = true                     # every 8 h while the Wavebound Voyage event runs
 
-[troops_training.quantity] # troops per training, by building (change these when the ratio changes)
+[troops_training.quantity] # troops per training, by building (change these when the ratio changes); 0 = skip it
 Barracks = 1199
 Stable = 1199
 Range = 1013

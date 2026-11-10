@@ -3,7 +3,7 @@
 World map -> side panel -> Town tab (preselected) -> Troops Training: Infantry's green arrow -> the town, centred
 on the Barracks with its menu open -> "Train" (always at the same spot) -> training page. Its bottom
 tabs switch between Barracks / Stable / Range; on each: its quantity (jobs.toml [troops_training.quantity]) -> Train. A tab that is still
-training shows "Speedups" instead of Train and is left alone.
+training shows "Speedups" instead of Train and is left alone. Quantity 0: that building is skipped (its timer too).
 !! Never Finish (gems) or Speedups.
 """
 
@@ -59,6 +59,9 @@ def troops_training(app: Kingshot, phone: Phone, log: Logger):
     waits = []
     for tab, xy in TRAIN_TABS.items():
         quantity = quantity_for(tab)
+        if quantity <= 0:  # jobs.toml quantity 0: skip this building (its timer doesn't book the next run)
+            log.info("%s: skipped (quantity 0)", tab)
+            continue
         phone.tap_xy(*xy)
         phone.wait_for(text=TROOP_TITLE, region=TRAIN_TITLE, timeout=10)
         time.sleep(1.5)  # the page settles (it can show "Train" for a moment)
