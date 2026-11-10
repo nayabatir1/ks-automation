@@ -205,8 +205,8 @@ def nomadic_merchant(app: Kingshot, phone: Phone, log: Logger):
         if not all(price_bar(img, xy) for xy in MERCHANT_PRICES):
             log.info("merchant: price bars not all visible; stopping")
             break
-        m = phone.find(text="Free Refresh", region=MERCHANT_REFRESH)
-        if not m or not 35 <= vision.median_hue(phone.last_screen, MERCHANT_REFRESH) <= 85:
+        m = free_refresh_button(phone)
+        if not m:
             log.info("merchant: every box costs gems and the refresh isn't free: done")
             break
         phone.tap_xy(*m.center)
@@ -216,6 +216,20 @@ def nomadic_merchant(app: Kingshot, phone: Phone, log: Logger):
         log.warning("merchant: stopped after %d rounds (safety limit)", MAX_MERCHANT_ROUNDS)
     log.info("merchant: %d box(es) bought, %d free refresh(es)", bought, refreshes)
     back_to_main(phone)
+
+
+def free_refresh_button(phone: Phone, timeout: float = 3) -> vision.Match | None:
+    """The green "Free Refresh" button, looked for until `timeout` (s): right after a buy the shop is still moving
+    and one look can miss it. None: not there or not green (a paid refresh)."""
+    end = time.monotonic() + timeout
+    while True:
+        phone.forget_screen()
+        m = phone.find(text="Free Refresh", region=MERCHANT_REFRESH)
+        if m and 35 <= vision.median_hue(phone.last_screen, MERCHANT_REFRESH) <= 85:
+            return m
+        if time.monotonic() >= end:
+            return None
+        time.sleep(0.5)
 
 
 def merchant_still_open(phone: Phone, log: Logger) -> bool:
