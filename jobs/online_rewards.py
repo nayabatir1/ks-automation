@@ -77,16 +77,20 @@ def save_state(**values: object) -> None:
 def close_panel(phone: Phone) -> None:
     """Close the side panel with its "<" tab (Back there would open the game's quit prompt).
     Closing the chest screen with a tap outside the panel can close the panel too: then there's nothing to do."""
-    if not phone.exists(text="Wilderness", region=SIDE_PANEL, timeout=1):
-        return
     for _ in range(3):  # a tap can be ignored (the panel stays open): tap "<" again
-        phone.tap(image="side_tab_close", region=PANEL_TAB, timeout=5)
+        if not phone.exists(text="Wilderness", region=SIDE_PANEL, timeout=1):
+            return
+        try:
+            phone.tap(image="side_tab_close", region=PANEL_TAB, timeout=5)
+        except ElementNotFound:  # no "<": the panel is closing already (an earlier tap did it late)
+            continue
         try:
             phone.wait_gone(text="Wilderness", region=SIDE_PANEL, timeout=5)
             return
         except PhoneError:
             pass
-    raise PhoneError("the side panel didn't close")
+    if phone.exists(text="Wilderness", region=SIDE_PANEL, timeout=1):
+        raise PhoneError("the side panel didn't close")
 
 
 @job()

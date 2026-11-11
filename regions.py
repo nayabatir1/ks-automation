@@ -156,8 +156,12 @@ SEARCH_LEVEL_LABEL = (600, 1910, 720, 1960)  # search panel: "Lv.8" above the le
 SEARCH_TICK = (255, 2110, 305, 2160)  # search panel: "Only search for full Resources" tick box (pixels)
 SEARCH_GO = (540, 2240)  # search panel: teal "Search"
 TILE_GATHER = (0.3, 0.48, 0.7, 0.53)  # found tile box: teal "Gather" (the "+" by Gathering Speed opens boosts: never)
-HERO_MINUS = {2: (641, 586), 3: (925, 586)}  # formation page: the orange "-" of hero cards 2 and 3
-HERO_CARD = {2: (539, 770), 3: (822, 770)}  # ...the middle of cards 2 and 3 (a white "+" when empty)
+HERO_MINUS = {
+    1: (358, 586),
+    2: (641, 586),
+    3: (925, 586),
+}  # formation page: the orange "-" of hero cards 1-3 (none: empty)
+HERO_FACE = (165, 625, 345, 815)  # ...card 1's face (pixels): templates/gather_hero_<resource>.png
 SAME_TARGET_CANCEL = (0.05, 0.58, 0.5, 0.66)  # "Other Troops are marching toward the same target": orange Cancel
 MARCH_QUEUE = (0.05, 0.3, 0.55, 0.64)  # side panel > Wilderness: "March Queue" and its 6 rows
 QUEUE_ROW_Y = 790  # ...first row starts here (pixels); one row every QUEUE_ROW_STEP
@@ -176,7 +180,9 @@ AUTO_JOIN_ENABLE = (540, 1860, 960, 1950)  # ...right button: teal "Enable" (sto
 AUTO_JOIN_LIMIT_TITLE = (0, 0.35, 1, 0.6)  # ...the "Queue Limit" header (the pop-up's layout moves with updates)
 AUTO_JOIN_LIMIT_ROW = 111  # ...the slider row is this far below that header (px)
 AUTO_JOIN_MINUS_X = 148  # ...its "-" (left end of the row)
-AUTO_JOIN_TRACK_X = (215, 600)  # ...the slider's track: green fill grows with the limit (1 = none)
+AUTO_JOIN_PLUS_X = 725  # ...its "+" (right of the slider)
+AUTO_JOIN_TRACK_X = (196, 676)  # ...the slider's track (between "-" and "+"): its teal handle moves along it
+AUTO_JOIN_HANDLE = (477, 82)  # ...the handle's centre x at Queue Limit 4, and px per step (6: x ~641, 1: x ~231)
 AUTO_JOIN_CLOSE_X = 1000  # ...its X: top right, level with the title
 SEARCH_LEVEL_PLUS = (695, 1965, 765, 2035)  # search panel: the "+" right of the level slider (grey at the top level)
 JOURNEY_SUPPLIES = (800, 173)  # Lostlands / Realm Journey crossroads: the supply counter (top, red dot)

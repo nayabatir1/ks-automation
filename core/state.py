@@ -58,6 +58,15 @@ class State:
         self.data[name] = entry
         self.save()
 
+    def book(self, name: str, at: datetime) -> None:
+        """Move a job's next run to `at` (e.g. another job freed something it needs to redo)."""
+        try:
+            self.data = json.loads(self.path.read_text())
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
+        self.data.setdefault(name, {})["next_at"] = at.astimezone(UTC).isoformat(timespec="seconds")
+        self.save()
+
     def save(self):
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.data, indent=2))

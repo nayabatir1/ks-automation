@@ -20,12 +20,14 @@ import cv2
 import numpy as np
 import pytesseract
 
+import config
 from core.phone import ElementNotFound
-from core.schedule import At
+from core.schedule import At, utcnow
+from core.state import State
 from core.task import job
 from core.timeparse import parse_duration
 from core.vision import crop, load_template, median_hue
-from jobs.farming import march_queue, on_world_map, set_queue_limit, stop_auto_join, to_world_map
+from jobs.farming import march_queue, on_world_map, recall_longest, set_queue_limit, stop_auto_join, to_world_map
 from jobs.online_rewards import close_panel
 from regions import (
     COMPASS_BUTTON,
@@ -63,11 +65,14 @@ DEPLOY_TAP = (822, 2210)  # centre of the Deploy button
 @job(schedule=At("00:05", "12:00", tz="UTC"), priority=110, timeout=1800)  # 5:35am + 5:30pm IST, last
 def intel_mission(app: Kingshot, phone: Phone, log: Logger):
     """Auto-Join off first (a rally can take the last free march, and bear / lion missions need one), wait for a
-    free march, do the missions; then always Auto-Join back on with Queue Limit 1."""
+    free march (all of them gathering: the one with the most gathering left is recalled, and farming runs right
+    after to send it again), do the missions; then always Auto-Join back on with farming's Queue Limit."""
     to_world_map(phone)
     stop_auto_join(app, phone, log)
     try:
-        wait_for_free_march(phone, log)
+        if wait_for_free_march(phone, log):
+            State(config.STATE_FILE).book("kingshot.farming", utcnow())
+            log.info("intel: farming booked for right after, to send the recalled march again")
         missions(app, phone, log)
     finally:
         try:
@@ -79,18 +84,26 @@ def intel_mission(app: Kingshot, phone: Phone, log: Logger):
             log.warning("auto-join: couldn't switch it back on (%s); farming's next round does it", e)
 
 
-def wait_for_free_march(phone: Phone, log: Logger, timeout: float = 600) -> None:
+def wait_for_free_march(phone: Phone, log: Logger, timeout: float = 600) -> bool:
     """Until the March Queue (side panel, Wilderness tab) has an "Idle" slot: a rally march comes back within
-    minutes. After the timeout it carries on anyway (tents and swords don't need a march)."""
+    minutes. None free, none coming home and no rally or attack out (all gathering, say): the gathering march with the most time left
+    is recalled (see recall_longest). After the timeout it carries on anyway (tents and swords don't need a march).
+    True if a march was recalled."""
     end = time.time() + timeout
+    recalled = False
     while True:
         slots = march_queue(phone, log)
         close_panel(phone)
         if any(q.idle for q in slots):
-            return
+            return recalled
+        rally = any(not q.kind and not q.idle and "Great" not in q.text for q in slots)  # back within minutes
+        if not recalled and not rally and not any(q.returning for q in slots):
+            recalled = recall_longest(phone, log)
+            if not recalled:
+                log.info("intel: no gathering march to recall (or its timer didn't read)")
         if time.time() > end:
             log.info("intel: still no free march after %d s; carrying on (bear / lion get skipped)", timeout)
-            return
+            return recalled
         log.info("intel: no free march; looking again in 30 s")
         time.sleep(30)
 

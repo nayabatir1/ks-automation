@@ -2,7 +2,12 @@
 
 World map -> magnifying glass (bottom left) -> search panel; for Bread, Wood, Stone and Iron: pick it in the row,
 the highest level (the "+" by the slider is grey; held until it is) and the "Only search for full Resources"
-tick -> Search -> Gather -> remove heroes 3 and 2 -> Deploy.
+tick -> Search -> Gather -> heroes off -> Deploy. jobs.toml [farming] queues = how many marches farming sends.
+A round: one march per resource (its gathering hero kept), then, once those gather, the next round is booked from
+their timers (the slowest + the way back), then the rest go out to random resources without heroes. At the booked
+time every unsecured gathering march is recalled and it starts again. On the formation page card 1 is that
+resource's gathering hero when it's free (templates/gather_hero_<resource>.png): it stays, heroes 2 and 3 go;
+any other hero there (its gathering hero is out): all heroes go. Auto-Join's Queue Limit = the other marches.
 "Other Troops are marching toward the same target" -> Cancel, search again. Troops aren't waited for.
 Starts on the city screen or world map; after_job backs out to where it started.
 """
@@ -10,6 +15,7 @@ Starts on the city screen or world map; after_job backs out to where it started.
 from __future__ import annotations
 
 import json
+import random
 import re
 import time
 from dataclasses import dataclass
@@ -21,7 +27,7 @@ import numpy as np
 import pytesseract
 
 import config
-from core import vision
+from core import switches, vision
 from core.phone import ElementNotFound
 from core.schedule import utcnow
 from core.task import job, run_parts
@@ -32,14 +38,16 @@ from regions import (
     AUTO_JOIN_CLOSE_X,
     AUTO_JOIN_ENABLE,
     AUTO_JOIN_FLAG,
+    AUTO_JOIN_HANDLE,
     AUTO_JOIN_LIMIT_ROW,
     AUTO_JOIN_LIMIT_TITLE,
     AUTO_JOIN_MINUS_X,
+    AUTO_JOIN_PLUS_X,
     AUTO_JOIN_STOP,
     AUTO_JOIN_TITLE,
     AUTO_JOIN_TRACK_X,
     DEPLOY_BUTTON,
-    HERO_CARD,
+    HERO_FACE,
     HERO_MINUS,
     LEFT_MID,
     MARCH_BADGE,
@@ -74,11 +82,14 @@ if TYPE_CHECKING:
 
 RESOURCES = ("Bread", "Wood", "Stone", "Iron")
 TILE_KEYS = ("Mill", "Lumber", "Quarry", "ron Mine")  # in their tiles' names (Idle Mill / Lumberyard / ...)
-MARCHES = 6  # march slots ("Marching N/6")
+MARCHES = 6  # march slots ("Marching N/6") when jobs.toml [farming] marches is missing or wrong
+QUEUES = 4  # marches farming sends when jobs.toml [farming] queues is missing or wrong
+GATHER_HERO_MATCH = 0.8  # card 1 vs templates/gather_hero_<resource>.png: own hero 1.0, other heroes <= 0.43
 EVERY = timedelta(hours=7, minutes=30)  # fallback round time when the gathering timers don't read
 HOME_MARGIN = timedelta(seconds=15)  # marches out: come back this long after the slowest timer runs out
 FARMING_FILE = config.LOG_DIR / "farming.json"  # next_refresh: the next regular run; march: last march time (s);
-# queue_limit_set: the Auto-Join Queue Limit was set this round
+# queue_limit_set: the Auto-Join Queue Limit was set this round; booked: next_refresh comes from this round's hero
+# marches (the marches without heroes go out after that)
 
 
 @dataclass
@@ -99,11 +110,10 @@ DEPLOY_TAP = (822, 2240)
 
 @job(timeout=1800)  # every 7.5 h (the job returns it); waiting for marches to come home can take many minutes
 def farming(app: Kingshot, phone: Phone, log: Logger):
-    """The regular run (when the slowest march of the last round is due home): set_queue_limit, wait for the marches
-    out (coming home, rallies) to free their slots, recall and resend everything. A follow-up run (marches arrived,
-    or a resource failed) only sends the resources that aren't out, without recalling; it sets the queue limit only
-    if that didn't work this round. Once all marches gather, the next regular run is booked for the longest
-    gathering time left + the march time back (see plan_next)."""
+    """The regular run (when the slowest hero march of the last round is due home): set_queue_limit, recall every
+    unsecured gathering march, wait for the marches out (coming home, rallies) to free their slots, send the hero
+    marches. A follow-up run (marches arrived, or one failed) goes on with the round without recalling (see
+    gather_all); it sets the queue limit only if that didn't work this round."""
     refresh = refresh_due()
     next_run = [EVERY]
 
@@ -158,20 +168,49 @@ def open_search_panel(app: Kingshot, phone: Phone, log: Logger) -> None:
     log.info("search panel open")
 
 
+def total_marches() -> int:
+    """The account's march slots: jobs.toml [farming] marches, else MARCHES."""
+    try:
+        return max(1, int(switches.setting("farming", "marches", MARCHES)))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return MARCHES
+
+
+def farming_queues() -> int:
+    """How many marches farming sends: jobs.toml [farming] queues (0..all marches), else QUEUES."""
+    try:
+        queues = int(switches.setting("farming", "queues", QUEUES))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        queues = QUEUES
+    return max(0, min(total_marches(), queues))
+
+
+def auto_join_limit() -> int:
+    """Auto-Join's Queue Limit: the marches farming doesn't use."""
+    return total_marches() - farming_queues()
+
+
 def set_queue_limit(app: Kingshot, phone: Phone, log: Logger) -> None:
-    """Search panel -> Terror -> Auto Join (flag, bottom right): Stop it if it runs (orange Stop), hold "-" until the
-    Queue Limit is 1 (see queue_limit_is_1), Enable (a fresh 8 h), close the pop-up and the search panel."""
+    """Search panel -> Terror -> Auto Join (flag, bottom right): Stop it if it runs (orange Stop), set the Queue Limit
+    to auto_join_limit() with "-" / "+" (the number box is read after each tap), Enable (a fresh 8 h), close the
+    pop-up and the search panel. A limit of 0 (farming uses every march): Auto-Join is stopped and left off."""
+    limit = auto_join_limit()
+    if limit <= 0:
+        stop_auto_join(app, phone, log)
+        log.info("auto-join: left off (farming uses all %d marches)", total_marches())
+        return
     open_auto_join(app, phone, log)
-    stop_if_running(phone, log)
-    for _ in range(4):  # Stop puts the Queue Limit back to 6
-        is_1, row_y = queue_limit_is_1(phone)
-        if is_1:
+    stop_if_running(phone, log)  # Stop puts the Queue Limit back to 6
+    for _ in range(total_marches() * 2):  # a tap can be ignored: read again after each one
+        value, row_y = queue_limit(phone)
+        if value == limit:
             break
-        log.info("auto-join: Queue Limit above 1; holding -")
-        phone.hold_xy(AUTO_JOIN_MINUS_X, row_y, seconds=3)
-        time.sleep(0.5)
+        if value is None:
+            raise RuntimeError("the Auto-Join Queue Limit doesn't read; not enabling")
+        phone.tap_xy(AUTO_JOIN_MINUS_X if value > limit else AUTO_JOIN_PLUS_X, row_y)
+        time.sleep(0.7)
     else:
-        raise RuntimeError("the Auto-Join Queue Limit isn't 1 after holding -; not enabling")
+        raise RuntimeError(f"the Auto-Join Queue Limit isn't {limit} after tapping -/+; not enabling")
     if not button_is(phone.screen(), AUTO_JOIN_ENABLE, hues=(75, 105)):  # teal "Enable" (or "Restart")
         raise RuntimeError("Auto-Join: the Enable button isn't teal; not tapping")
     phone.tap_xy(*mid(AUTO_JOIN_ENABLE))
@@ -179,7 +218,7 @@ def set_queue_limit(app: Kingshot, phone: Phone, log: Logger) -> None:
     phone.forget_screen()
     if not button_is(phone.screen(), AUTO_JOIN_STOP, hues=(5, 25)):
         raise RuntimeError("Auto-Join didn't start (Stop isn't orange)")
-    log.info("auto-join: enabled with Queue Limit 1")
+    log.info("auto-join: enabled with Queue Limit %d", limit)
     close_auto_join(phone)
     on_world_map(phone)  # Back closes the search panel
 
@@ -244,39 +283,62 @@ def button_is(img: Image, box: tuple[int, int, int, int], hues: tuple[int, int])
     return vision.coloured_share(img, box) > 0.3 and hues[0] <= vision.median_hue(img, box) <= hues[1]
 
 
-def queue_limit_is_1(phone: Phone) -> tuple[bool, int]:
-    """The Auto-Join pop-up's Queue Limit is 1: its slider's track has no green fill (6 fills it). The row is found
-    from its "Queue Limit" header (the pop-up's layout moves with updates). Also returns the row's y."""
+def queue_limit(phone: Phone) -> tuple[int | None, int]:
+    """The Auto-Join pop-up's Queue Limit, from where the slider's teal handle sits (the number box's lone digit
+    doesn't OCR); None if no handle is seen. The row is found from its "Queue Limit" header (the pop-up's layout
+    moves with updates). Also returns the row's y."""
     phone.forget_screen()
     header = phone.find(text="Queue Limit", region=AUTO_JOIN_LIMIT_TITLE)
     if not header:
         raise ElementNotFound("the Auto-Join pop-up's Queue Limit isn't on screen")
     y = header.center[1] + AUTO_JOIN_LIMIT_ROW
     x1, x2 = AUTO_JOIN_TRACK_X
-    hsv = cv2.cvtColor(phone.screen()[y - 12 : y + 12, x1:x2], cv2.COLOR_BGR2HSV)
-    green = (hsv[:, :, 0] >= 45) & (hsv[:, :, 0] <= 80) & (hsv[:, :, 1] > 120) & (hsv[:, :, 2] > 150)
-    return float(green.mean()) < 0.05, y
+    hsv = cv2.cvtColor(phone.screen()[y - 10 : y + 10, x1:x2], cv2.COLOR_BGR2HSV)
+    hue, sat = np.median(hsv[:, :, 0], axis=0), np.median(hsv[:, :, 1], axis=0)
+    xs = np.nonzero((hue >= 85) & (hue <= 100) & (sat > 100))[0]  # the handle (the green fill is ~78)
+    if len(xs) < 10:
+        return None, y
+    at_4, step = AUTO_JOIN_HANDLE
+    return round((x1 + float(xs.mean()) - at_4) / step) + 4, y
 
 
 def gather_all(app: Kingshot, phone: Phone, log: Logger, recall: bool = True) -> timedelta:
     """recall=True (the regular run): recall every unsecured gathering march (map's Marching list; secured ones,
     rallies and other marches stay). Then the side panel's Wilderness tab (March Queue: one row per march slot) is
     read: marches still out -> the job ends and comes back when the slowest is home (see marches_home; the game is
-    closed meanwhile). Else each resource that isn't out is sent into the "Idle" slots. A resource that fails is tried again after RETRY_MINUTES (only that one).
-    Returns when the job should run next."""
+    closed meanwhile). Else, into the "Idle" slots:
+    1. each resource with none of ours out, its gathering hero kept; the job comes back when they gather;
+    2. all out and gathering: the next round is booked from their timers (see plan_next);
+    3. then the rest of jobs.toml's queues: random resources without heroes; the job comes back at the booked time.
+    A march that fails is tried again after RETRY_MINUTES (only the missing ones are sent then). Returns when the
+    job should run next."""
     to_world_map(phone)
     if recall:
         recall_gathering(phone, log)
-        save_farming(next_refresh=(utcnow() + EVERY).isoformat())  # for now; plan_next books the real time
+        save_farming(next_refresh=(utcnow() + EVERY).isoformat(), booked=False)  # plan_next books the real time
     slots = marches_home(phone, log, recall)
     if isinstance(slots, timedelta):  # marches still out: come back when they're home
         if recall:  # the comeback is this round's regular run again (it recalls what has reached its tile by then)
             save_farming(next_refresh=(utcnow() + slots).isoformat())
         return slots
-    out = {k for q in slots if (k := q.kind)}
-    todo = [k for k in RESOURCES if k not in out]
+    missing, extras = to_send(slots)
+    if not missing and not load_farming().get("booked"):  # the hero marches are out: they book the round first
+        wait = plan_next(phone, log, sent=False)
+        if not extras or not load_farming().get("booked"):  # nothing more to send, or still on their way
+            return wait
+    todo = missing or [random.choice(RESOURCES) for _ in range(extras)]
+    ours = [k for q in slots if (k := q.kind)]
     free = sum(q.idle for q in slots)
-    log.info("march queue: %d of %d idle; out: %s; to send: %s", free, len(slots), sorted(out) or "-", todo or "-")
+    log.info(
+        "march queue: %d of %d idle; ours out: %d of %d (%s); to send %s: %s",
+        free,
+        len(slots),
+        len(ours),
+        farming_queues(),
+        ", ".join(sorted(ours)) or "-",
+        "with heroes" if missing else "without heroes",
+        ", ".join(todo) or "-",
+    )
     failed = []
     if todo:
         open_search_panel(app, phone, log)
@@ -292,21 +354,29 @@ def gather_all(app: Kingshot, phone: Phone, log: Logger, recall: bool = True) ->
     if failed:
         log.info("trying %s again in %d min", ", ".join(failed), config.RETRY_MINUTES)
         return timedelta(minutes=config.RETRY_MINUTES)
-    return plan_next(phone, log, sent=bool(todo[:free]))
+    return plan_next(phone, log, sent=bool(missing and todo[:free]))
+
+
+def to_send(slots: list[Slot]) -> tuple[list[str], int]:
+    """What farming sends, from the March Queue: (each resource with none of ours out: a march with its gathering
+    hero, how many more without heroes after those, up to jobs.toml's queues)."""
+    ours = [k for q in slots if (k := q.kind)]
+    want = max(farming_queues() - len(ours), 0)
+    missing = [k for k in RESOURCES if k not in ours][:want]
+    return missing, want - len(missing)
 
 
 def marches_home(phone: Phone, log: Logger, recall: bool) -> list[Slot] | timedelta:
-    """Read the March Queue once. Nothing coming home, no rally holding a slot a resource needs and (regular run)
-    none of ours still on its way to its tile: the March Queue. Else how long until the slowest of them is done
-    (+ HOME_MARGIN; RETRY_MINUTES when no timer reads): the job comes back then instead of waiting with the game
-    open. A follow-up run doesn't wait for ours on their way: they're the ones it sent."""
+    """Read the March Queue once. Nothing coming home, no rally holding a slot a resource with none of ours out
+    needs (the random extra marches only take what's idle) and (regular run) none of ours still on its way to its
+    tile: the March Queue. Else how long until the slowest of them is done (+ HOME_MARGIN; RETRY_MINUTES when no
+    timer reads): the job comes back then instead of waiting with the game open. A follow-up run doesn't wait for
+    ours on their way: they're the ones it sent."""
     on_world_map(phone)
     slots = march_queue(phone, log)
     close_panel(phone)
-    out = {k for q in slots if (k := q.kind)}
-    todo = [k for k in RESOURCES if k not in out]
     moving = [q for q in slots if q.returning or (recall and q.on_way)]
-    short = len(todo) - sum(q.idle for q in slots)  # slots a resource needs that a rally (or anything) holds
+    short = len(to_send(slots)[0]) - sum(q.idle for q in slots)  # slots a hero march needs that a rally holds
     if not moving and short <= 0:
         return slots
     timers = [q.timer for q in moving if q.timer]
@@ -321,9 +391,12 @@ def marches_home(phone: Phone, log: Logger, recall: bool) -> list[Slot] | timede
 
 
 def plan_next(phone: Phone, log: Logger, sent: bool) -> timedelta:
-    """When to run next, from the March Queue. Ours still on their way: when the slowest arrives (right after
-    sending, that's also the march time, kept for the way back). All gathering: the next regular run, when the
+    """When to run next. The round is booked already (the hero marches did it): at the booked time. Else from the
+    March Queue: ours still on their way: when the slowest arrives (right after sending, that's also the march time,
+    kept for the way back). All gathering (only the hero marches are out then): the round is booked for when the
     slowest is home again = its gathering time left + the march time back. Timers unread: EVERY."""
+    if load_farming().get("booked"):
+        return until_refresh(log)
     to_world_map(phone)
     on_world_map(phone)
     slots = march_queue(phone, log)
@@ -342,12 +415,23 @@ def plan_next(phone: Phone, log: Logger, sent: bool) -> timedelta:
     if left and len(left) == len(gathering):
         march = timedelta(seconds=float(load_farming().get("march", 300)))
         wait = max(left) + march + timedelta(minutes=1)
-        save_farming(next_refresh=(utcnow() + wait).isoformat())
-        log.info("all gathering (longest %s left) + %s back: next round in %s", max(left), march, wait)
+        save_farming(next_refresh=(utcnow() + wait).isoformat(), booked=True)
+        log.info("hero marches gathering (longest %s left) + %s back: next round in %s", max(left), march, wait)
         return wait
     log.info("gathering times not readable; next round in %s", EVERY)
-    save_farming(next_refresh=(utcnow() + EVERY).isoformat())
+    save_farming(next_refresh=(utcnow() + EVERY).isoformat(), booked=True)
     return EVERY
+
+
+def until_refresh(log: Logger) -> timedelta:
+    """Time left to the booked round (FARMING_FILE next_refresh); at least a minute."""
+    try:
+        at = datetime.fromisoformat(load_farming()["next_refresh"])
+    except (KeyError, ValueError):
+        return EVERY
+    wait = max(at - utcnow(), timedelta(minutes=1))
+    log.info("round booked by the hero marches: next round in %s", wait)
+    return wait
 
 
 def back_to_search(app: Kingshot, phone: Phone, log: Logger) -> None:
@@ -422,7 +506,7 @@ def march_queue(phone: Phone, log: Logger) -> list[Slot]:
     rows: dict[int, list[vision.Match]] = {}
     for m in lines:
         i = (m.center[1] - QUEUE_ROW_Y) // QUEUE_ROW_STEP
-        if 0 <= i < MARCHES:
+        if 0 <= i < total_marches():
             rows.setdefault(i, []).append(m)
     slots = []
     for i in sorted(rows):
@@ -474,7 +558,7 @@ def marches_out(phone: Phone) -> int:
         phone.forget_screen()
         img = phone.screen()
         n = 0
-        while n < MARCHES:
+        while n < total_marches():
             y = MARCH_ROW_Y + MARCH_ROW_STEP * n
             box = (MARCH_RECALL_X - 23, y - 22, MARCH_RECALL_X + 24, y + 22)
             if not (vision.coloured_share(img, box) > 0.5 and 86 <= vision.median_hue(img, box) <= 98):
@@ -518,7 +602,7 @@ def recall_gathering(phone: Phone, log: Logger) -> int:
     marches stay; one still marching to its tile is recalled by the next run, once it gathers. The list is read
     again after each recall: rows move up when a march gets home. Returns how many were recalled."""
     recalled = 0
-    for _ in range(MARCHES):
+    for _ in range(total_marches()):
         on_world_map(phone)
         gathering = [m for m in march_rows(phone) if m.kind and not m.secured and m.status.startswith("Gather")]
         if not gathering:  # (OCR may cut the end of "Gathering")
@@ -534,6 +618,22 @@ def recall_gathering(phone: Phone, log: Logger) -> int:
         if m.secured and m.status.startswith("Gather"):
             log.info("left a secured %s march out", m.kind or "gathering")
     return recalled
+
+
+def recall_longest(phone: Phone, log: Logger) -> bool:
+    """Recall the unsecured gathering march of ours with the most gathering time left (frees a march for another job;
+    farming sends it again). False if there's none, or no timer reads."""
+    on_world_map(phone)
+    rows = [m for m in march_rows(phone) if m.kind and not m.secured and m.status.startswith("Gather") and m.timer]
+    if not rows:
+        return False
+    m = max(rows, key=lambda r: r.timer or timedelta())
+    phone.tap_xy(MARCH_RECALL_X, m.y)  # the teal return arrow at the row's right end
+    confirm = phone.wait_for(text="Confirm", region=RECALL_CONFIRM, timeout=5)  # "Recall squad?"
+    phone.tap_xy(*confirm.center)
+    time.sleep(1.5)
+    log.info("recalled the %s march with the most gathering left (%s)", m.kind, m.timer)
+    return True
 
 
 def on_world_map(phone: Phone) -> None:
@@ -604,35 +704,50 @@ def gather(phone: Phone, log: Logger, kind: str, tries: int = 3) -> None:
 
 
 def remove_heroes(phone: Phone, log: Logger, kind: str) -> None:
-    """Formation page: take heroes 3 and 2 off: tap the orange "-" of card 3, then of card 2 (right to left, so the
-    cards can't shift), then check both cards show the empty "+". A card still holding its hero gets its "-" tapped
-    again (a tap can be ignored); a "+" card is never tapped (that opens Select Heroes). Raises if a hero stays on:
-    that march isn't deployed (only this resource is tried again)."""
+    """Formation page: card 1 is this resource's gathering hero (it's free; see gather_hero_score): heroes 3 and 2
+    go. Anyone else on card 1 (the gathering hero is out), or nobody: heroes 3, 2 and 1 go. Their orange "-" is
+    tapped right to left (so the cards can't shift), then the cards must show the empty "+". A card still holding
+    its hero gets its "-" tapped again (a tap can be ignored); a "+" card is never tapped (that opens Select
+    Heroes). Raises if a hero stays on: that march isn't deployed (it's sent again later)."""
     time.sleep(1)  # the page finishes opening
+    phone.forget_screen()
+    score = gather_hero_score(phone.screen(), kind)
+    off = (3, 2) if score >= GATHER_HERO_MATCH else (3, 2, 1)
+    done = "gathering hero on, heroes 2 and 3 off" if len(off) == 2 else "gathering hero not free, all heroes off"
     for _ in range(3):
         phone.forget_screen()
         img = phone.screen()
-        on = [hero for hero in (3, 2) if not card_empty(img, hero)]
+        on = [hero for hero in off if not card_empty(img, hero)]
         if not on:
-            log.info("%s: heroes 2 and 3 off", kind)
+            log.info("%s: %s (hero match %.2f)", kind, done, score)
             return
         for hero in on:
             phone.tap_xy(*HERO_MINUS[hero])
             time.sleep(1)
     phone.forget_screen()
     img = phone.screen()
-    still = [hero for hero in (3, 2) if not card_empty(img, hero)]
+    still = [hero for hero in off if not card_empty(img, hero)]
     if still:
         raise RuntimeError(f"{kind}: hero(es) {still} still on the formation after 3 tries; not deploying")
-    log.info("%s: heroes 2 and 3 off", kind)
+    log.info("%s: %s (hero match %.2f)", kind, done, score)
+
+
+def gather_hero_score(img: Image, kind: str) -> float:
+    """How well formation card 1 matches this resource's gathering hero (templates/gather_hero_<kind>.png; the
+    game puts that hero there when it's free): its own ~1.0, other heroes <= 0.43."""
+    x1, y1, x2, y2 = HERO_FACE
+    part = img[y1 - 20 : y2 + 20, x1 - 20 : x2 + 20]
+    template = load_template(f"gather_hero_{kind.lower()}")[0]
+    return float(cv2.minMaxLoc(cv2.matchTemplate(part, template, cv2.TM_CCOEFF_NORMED))[1])
 
 
 def card_empty(img: Image, hero: int) -> bool:
-    """Formation card 2 / 3 is empty: a dark card with a big white "+" (~2,200 white px in its middle; a hero's
-    card has none)."""
-    x, y = HERO_CARD[hero]
-    hsv = cv2.cvtColor(img[y - 40 : y + 40, x - 40 : x + 40], cv2.COLOR_BGR2HSV)
-    return int(((hsv[:, :, 1] < 40) & (hsv[:, :, 2] > 220)).sum()) > 800
+    """Formation card 1 / 2 / 3 is empty: no orange "-" at its top right (a hero's card has it; ~68% orange there).
+    (Not the white "+" in the middle: a hero in a white fur coat looked empty that way.)"""
+    x, y = HERO_MINUS[hero]
+    hsv = cv2.cvtColor(img[y - 15 : y + 15, x - 20 : x + 20], cv2.COLOR_BGR2HSV)
+    orange = (hsv[:, :, 0] >= 5) & (hsv[:, :, 0] <= 20) & (hsv[:, :, 1] > 150) & (hsv[:, :, 2] > 180)
+    return float(orange.mean()) < 0.2
 
 
 def swipe_row_to_start(phone: Phone) -> None:

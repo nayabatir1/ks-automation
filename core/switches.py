@@ -43,3 +43,9 @@ def settings(job: str, name: str) -> dict:
     """A job's own settings table, e.g. settings("troops_training", "quantity") = [troops_training.quantity]."""
     table = _load().get(job, {}).get(name, {})
     return table if isinstance(table, dict) else {}
+
+
+def setting(job: str, name: str, default: object = None) -> object:
+    """One value from a job's own table, e.g. setting("farming", "queues") = [farming] queues."""
+    table = _load().get(job, {})
+    return table.get(name, default) if isinstance(table, dict) else default

@@ -24,6 +24,11 @@ farming = true                    # every 7.5 h: the parts below
 bank = true                       # on the Daily 5% box's countdown
 voyage = true                     # every 8 h while the Wavebound Voyage event runs
 
+[farming]
+marches = 6 # the account's march slots (the side panel's March Queue rows)
+queues = 4  # how many of them farming sends: one per resource with its gathering hero when it's free, the rest
+# random resources without heroes; Auto-Join gets the others (marches - queues; 0 = Auto-Join stays off)
+
 [troops_training.quantity] # troops per training, by building (change these when the ratio changes); 0 = skip it
 Barracks = 1199
 Stable = 1199
@@ -47,5 +52,5 @@ pan_extra_intel_mission = true
 arena = true
 
 [parts.farming]
-set_queue_limit = true # Auto-Join: Queue Limit 1
-gather = true          # recall and resend Bread / Wood / Stone / Iron
+set_queue_limit = true # Auto-Join: Queue Limit = [farming] marches - queues (0: left off)
+gather = true          # recall and resend the marches ([farming] queues)
