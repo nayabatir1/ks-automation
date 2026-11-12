@@ -87,7 +87,7 @@ def fight_arena(app: Kingshot, phone: Phone, log: Logger):
 
     # 5. attack until the daily attempts are used, a different player each time where possible (see pick_opponent):
     #    green (weaker than me) not yet attacked -> Free Refresh (only if it's free) -> red not yet attacked ->
-    #    only then someone a second time. Each fight: Fight -> pause -> Retreat (ends it at once, as a
+    #    only then someone a second time. Each fight: Quick Deploy -> Fight -> pause -> Retreat (ends it at once, as a
     #    loss: the user's choice) -> tap anywhere to exit -> back to the Challenge List.
     #    !! Out of attempts the game offers more for gems: we stop at 0 and never tap "+" or anything with gems.
     attack_all(phone, log)
@@ -159,7 +159,8 @@ def pick_opponent(
 MAX_FIGHTS = 10  # safety limit per run (daily attempts are usually 4)
 MAX_REFRESHES = 3  # per run, so a refresh can never loop
 LIST_TITLE = (0.1, 0.2, 0.9, 0.27)  # "Challenge List" box title
-FIGHT_BUTTON = (0.5, 0.9, 0.98, 0.99)  # Squad Settings: green "Fight" (bottom right; "Quick Deploy" is left)
+FIGHT_BUTTON = (0.5, 0.9, 0.98, 0.99)  # Squad Settings: green "Fight" (bottom right)
+QUICK_DEPLOY = (0.02, 0.9, 0.5, 0.99)  # Squad Settings: teal "Quick Deploy" (bottom left, left of Fight)
 PAUSE_AREA = (0, 0.7, 0.4, 0.88)  # battle: pause button, bottom left (templates/battle_pause.png)
 RETREAT_AREA = (0.15, 0.53, 0.5, 0.63)  # paused: "Retreat" (left) / "Continue" (right)
 POWER_X = (285, 430)  # the power figure beside the fist icon: green = lower than mine, red = higher
@@ -235,7 +236,7 @@ def open_challenge_list(phone: Phone) -> None:
 
 
 def fight(phone: Phone, log: Logger, y: int) -> None:
-    """Swords -> Squad Settings -> Fight -> pause -> Retreat -> result -> tap anywhere to exit."""
+    """Swords -> Squad Settings -> Quick Deploy -> Fight -> pause -> Retreat -> result -> tap anywhere to exit."""
     tap_swords(phone, y)
     start_battle(phone, log)
     pause_and_retreat(phone)
@@ -249,9 +250,13 @@ def fight(phone: Phone, log: Logger, y: int) -> None:
 
 
 def start_battle(phone: Phone, log: Logger) -> None:
-    """Squad Settings: green Fight (bottom right) -> the battle (its pause button shows). A tap while the screen is
-    still settling in is ignored: then Fight is still there, tap it again."""
-    phone.tap(text="Fight", region=FIGHT_BUTTON, timeout=15)
+    """Squad Settings: Quick Deploy (bottom left: the strongest squad) first, then green Fight (bottom right) -> the
+    battle (its pause button shows). A tap while the screen is still settling in is ignored: then Fight is still
+    there, tap it again."""
+    phone.tap(text="Quick Deploy", region=QUICK_DEPLOY, timeout=15)
+    log.info("quick deploy")
+    time.sleep(1)  # the squad is placed
+    phone.tap(text="Fight", region=FIGHT_BUTTON, timeout=10)
     for _ in range(3):
         if phone.exists(image="battle_pause", region=PAUSE_AREA, timeout=8):
             return
