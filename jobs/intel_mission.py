@@ -57,7 +57,6 @@ PIN_KINDS = ("tent", "swords", "bear", "lion")
 ACTIONS = {"tent": "Rescue", "swords": "Conquer", "bear": "Attack", "lion": "Attack"}
 BUTTON_HUES = {"tent": (40, 75), "swords": (80, 100), "bear": (5, 22), "lion": (5, 22)}
 MIN_MEAT = 20  # stop below this (a mission costs 8-12): never reach a "buy stamina" prompt
-MAX_MISSIONS = 25  # per run, so it can never loop
 BLANK = (540, 300)  # dim area above pop-ups
 DEPLOY_TAP = (822, 2210)  # centre of the Deploy button
 
@@ -114,7 +113,7 @@ def missions(app: Kingshot, phone: Phone, log: Logger) -> None:
     done = claims = 0
     skipped = set()
     rechecked = False  # nothing found once: the map is opened again to be sure
-    for _ in range(MAX_MISSIONS * 2):
+    while True:  # until no pins are left, the meat runs low, or only skipped pins remain (the job timeout backs it up)
         open_now, finished = pins(phone.screen())
         log.info(
             "intel: pins open %s, finished %s",
@@ -150,9 +149,6 @@ def missions(app: Kingshot, phone: Phone, log: Logger) -> None:
             log.info("intel: no open pins left%s", f" (skipped {len(skipped)})" if skipped else "")
             break
         rechecked = False
-        if done >= MAX_MISSIONS:
-            log.info("intel: %d missions done; stopping (safety limit)", done)
-            break
         kind, x, y = pin
         if do_mission(phone, log, kind, x, y):
             done += 1
