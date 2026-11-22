@@ -110,8 +110,9 @@ DEPLOY_TAP = (822, 2240)
 
 @job(timeout=1800)  # every 7.5 h (the job returns it); waiting for marches to come home can take many minutes
 def farming(app: Kingshot, phone: Phone, log: Logger):
-    """The regular run (when the slowest hero march of the last round is due home): set_queue_limit, recall every
-    unsecured gathering march, wait for the marches out (coming home, rallies) to free their slots, send the hero
+    """Every run, first: jobs.toml [farming] secured = 0 -> recall_secured recalls the secured gathering marches
+    (alliance "Great ..." buildings). The regular run (when the slowest hero march of the last round is due home):
+    set_queue_limit, recall every unsecured gathering march, wait for the marches out (coming home, rallies) to free their slots, send the hero
     marches. A follow-up run (marches arrived, or one failed) goes on with the round without recalling (see
     gather_all); it sets the queue limit only if that didn't work this round."""
     refresh = refresh_due()
@@ -125,10 +126,18 @@ def farming(app: Kingshot, phone: Phone, log: Logger):
         set_queue_limit(app, phone, log)
         save_farming(queue_limit_set=True)
 
+    def secured_part(app: Kingshot, phone: Phone, log: Logger) -> None:
+        if secured_marches():
+            log.info("secured gathering: %d march(es) kept, nothing recalled", secured_marches())
+            return
+        to_world_map(phone)
+        if not recall_gathering(phone, log, secured=True):
+            log.info("secured gathering: none out")
+
     def gather_part(app: Kingshot, phone: Phone, log: Logger) -> None:
         next_run[0] = gather_all(app, phone, log, recall=refresh)
 
-    run_parts(app, phone, log, {"set_queue_limit": queue_part, "gather": gather_part})
+    run_parts(app, phone, log, {"set_queue_limit": queue_part, "recall_secured": secured_part, "gather": gather_part})
     return next_run[0]
 
 
@@ -185,19 +194,34 @@ def farming_queues() -> int:
     return max(0, min(total_marches(), queues))
 
 
+def secured_marches() -> int:
+    """Marches kept for secured gathering (alliance territory, sent by hand): jobs.toml [farming] secured, else 0."""
+    try:
+        secured = int(switches.setting("farming", "secured", 0))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        secured = 0
+    return max(0, min(total_marches(), secured))
+
+
 def auto_join_limit() -> int:
-    """Auto-Join's Queue Limit: the marches farming doesn't use."""
-    return total_marches() - farming_queues()
+    """Auto-Join's Queue Limit: the marches neither farming nor secured gathering uses (at least 0)."""
+    return max(0, total_marches() - farming_queues() - secured_marches())
 
 
 def set_queue_limit(app: Kingshot, phone: Phone, log: Logger) -> None:
     """Search panel -> Terror -> Auto Join (flag, bottom right): Stop it if it runs (orange Stop), set the Queue Limit
     to auto_join_limit() with "-" / "+" (the number box is read after each tap), Enable (a fresh 8 h), close the
-    pop-up and the search panel. A limit of 0 (farming uses every march): Auto-Join is stopped and left off."""
+    pop-up and the search panel. A limit of 0 (farming and secured gathering use every march): Auto-Join is stopped
+    and left off."""
     limit = auto_join_limit()
     if limit <= 0:
         stop_auto_join(app, phone, log)
-        log.info("auto-join: left off (farming uses all %d marches)", total_marches())
+        log.info(
+            "auto-join: left off (%d marches: farming %d, secured gathering %d)",
+            total_marches(),
+            farming_queues(),
+            secured_marches(),
+        )
         return
     open_auto_join(app, phone, log)
     stop_if_running(phone, log)  # Stop puts the Queue Limit back to 6
@@ -326,6 +350,8 @@ def gather_all(app: Kingshot, phone: Phone, log: Logger, recall: bool = True) ->
         wait = plan_next(phone, log, sent=False)
         if not extras or not load_farming().get("booked"):  # nothing more to send, or still on their way
             return wait
+    if missing:  # new hero marches: they book the round (an older booking, e.g. a follow-up run after a hand
+        save_farming(booked=False)  # recall, would end their gathering early)
     todo = missing or [random.choice(RESOURCES) for _ in range(extras)]
     ours = [k for q in slots if (k := q.kind)]
     free = sum(q.idle for q in slots)
@@ -597,14 +623,19 @@ def march_kind(img: Image, y: int) -> str | None:
     return best if scores[best] >= 0.82 else None  # own icon 0.84-1.0 (secured: badge), others <= 0.79
 
 
-def recall_gathering(phone: Phone, log: Logger) -> int:
-    """Recall every unsecured resource march that is gathering now. Secured ones (white badge), rallies and other
-    marches stay; one still marching to its tile is recalled by the next run, once it gathers. The list is read
-    again after each recall: rows move up when a march gets home. Returns how many were recalled."""
+def recall_gathering(phone: Phone, log: Logger, secured: bool = False) -> int:
+    """Recall every unsecured resource march that is gathering now (secured=True: every secured one instead, white
+    badge: an alliance "Great ..." building). Rallies and other marches stay; one still marching to its tile is
+    recalled by the next run, once it gathers. The list is read again after each recall: rows move up when a march
+    gets home. Returns how many were recalled."""
     recalled = 0
     for _ in range(total_marches()):
         on_world_map(phone)
-        gathering = [m for m in march_rows(phone) if m.kind and not m.secured and m.status.startswith("Gather")]
+        rows = march_rows(phone)
+        if secured:
+            gathering = [m for m in rows if m.secured and m.status.startswith("Gather")]
+        else:
+            gathering = [m for m in rows if m.kind and not m.secured and m.status.startswith("Gather")]
         if not gathering:  # (OCR may cut the end of "Gathering")
             break
         m = gathering[0]
@@ -613,10 +644,11 @@ def recall_gathering(phone: Phone, log: Logger) -> int:
         phone.tap_xy(*confirm.center)
         time.sleep(1.5)
         recalled += 1
-        log.info("recalled a %s march", m.kind)
-    for m in march_rows(phone):
-        if m.secured and m.status.startswith("Gather"):
-            log.info("left a secured %s march out", m.kind or "gathering")
+        log.info("recalled a %s%s march", "secured " if m.secured else "", m.kind or "gathering")
+    if not secured:
+        for m in march_rows(phone):
+            if m.secured and m.status.startswith("Gather"):
+                log.info("left a secured %s march out", m.kind or "gathering")
     return recalled
 
 
