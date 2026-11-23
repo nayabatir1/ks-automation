@@ -612,15 +612,19 @@ def march_rows(phone: Phone) -> list[March]:
     return rows
 
 
+ICON_CROP = 10  # px cut off each side of the march_<kind> templates (whole: an iron icon read as stone, 11-23)
+
+
 def march_kind(img: Image, y: int) -> str | None:
     """The resource on a row's icon (templates/march_<kind>.png), or None (a rally, an attack, ...)."""
     part = img[y - 40 : y + 40, 5:95]
-    scores = {
-        kind: float(cv2.minMaxLoc(cv2.matchTemplate(part, load_template(f"march_{kind}")[0], cv2.TM_CCOEFF_NORMED))[1])
-        for kind in ("bread", "wood", "stone", "iron")
-    }
+    scores = {}
+    for kind in ("bread", "wood", "stone", "iron"):
+        t = load_template(f"march_{kind}")[0]
+        t = t[ICON_CROP:-ICON_CROP, ICON_CROP:-ICON_CROP]  # the icon only: the template's edges hold background
+        scores[kind] = float(cv2.minMaxLoc(cv2.matchTemplate(part, t, cv2.TM_CCOEFF_NORMED))[1])
     best = max(scores, key=lambda k: scores[k])
-    return best if scores[best] >= 0.82 else None  # own icon 0.84-1.0 (secured: badge), others <= 0.79
+    return best if scores[best] >= 0.82 else None  # own icon 0.96-1.0, the other resources <= 0.74
 
 
 def recall_gathering(phone: Phone, log: Logger, secured: bool = False) -> int:
