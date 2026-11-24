@@ -94,12 +94,22 @@ class Phone:
         log.info("Connected to %s (%dx%d)", self.serial, self.width, self.height)
 
     # ------------------------------------------------------------------ adb
-    def _adb(self, *args: str, check: bool = True, timeout: float = 30) -> subprocess.CompletedProcess[bytes]:
+    def _adb(
+        self, *args: str, check: bool = True, timeout: float = 30, retry: bool = False
+    ) -> subprocess.CompletedProcess[bytes]:
+        """retry=True: a command that hangs past timeout is run once more right away (screencap hangs now and
+        then; the next one works)."""
         cmd = ["adb"] + (["-s", self.serial] if self.serial else []) + list(args)
-        try:
-            r = subprocess.run(cmd, capture_output=True, timeout=timeout, check=False)
-        except subprocess.TimeoutExpired:
-            raise PhoneError(f"adb timed out after {timeout}s: {' '.join(args)}")
+        for attempt in (1, 2):
+            try:
+                r = subprocess.run(cmd, capture_output=True, timeout=timeout, check=False)
+                break
+            except subprocess.TimeoutExpired:
+                if not retry or attempt == 2:
+                    raise PhoneError(f"adb timed out after {timeout}s: {' '.join(args)}")
+                log.warning("adb timed out after %ss: %s; trying again", timeout, " ".join(args))
+        else:  # unreachable: the loop breaks or raises
+            raise PhoneError(f"adb {' '.join(args)}: no result")
         if check and r.returncode != 0:
             raise PhoneError(f"adb {' '.join(args)} failed: {r.stderr.decode(errors='replace').strip()}")
         return r
@@ -218,7 +228,7 @@ class Phone:
                 _, y1, _, y2 = vision.resolve_region(region, img.shape)
                 self._keep(img, y1, y2)
                 return img
-        raw = self._adb("exec-out", "screencap", timeout=30).stdout  # raw is ~4x faster than -p
+        raw = self._adb("exec-out", "screencap", timeout=15, retry=True).stdout  # raw is ~4x faster than -p
         img = None
         if len(raw) >= 12:
             w, h = (int(v) for v in np.frombuffer(raw[:8], "<u4"))
@@ -228,7 +238,7 @@ class Phone:
                 img = np.ascontiguousarray(rgba[:, :, 2::-1])  # RGBA -> BGR
                 self._raw = (header, w, h)
         if img is None:  # unknown format: use PNG
-            img = vision.decode_png(self._adb("exec-out", "screencap", "-p", timeout=30).stdout)
+            img = vision.decode_png(self._adb("exec-out", "screencap", "-p", timeout=15, retry=True).stdout)
         self._keep(img, 0, img.shape[0])
         return img
 
@@ -264,7 +274,7 @@ class Phone:
         _, y1, _, y2 = vision.resolve_region(region, (h, w))
         row = w * 4
         cmd = f"screencap | tail -c +{header + y1 * row + 1} | head -c {(y2 - y1) * row}"
-        raw = self._adb("exec-out", cmd, timeout=30).stdout
+        raw = self._adb("exec-out", cmd, timeout=15, retry=True).stdout
         if len(raw) != (y2 - y1) * row:
             return None  # odd size (rotated?): full screenshot
         img = np.zeros((h, w, 3), np.uint8)
