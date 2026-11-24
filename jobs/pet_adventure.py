@@ -1,9 +1,9 @@
 """Kingshot job: pet adventure. 00:05 + 12:00 UTC (5:35am + 5:30pm IST), after intel_mission.
 
 World map -> side panel -> Daily tab -> Pet Adventure's arrow, then the parts (each can be switched off in jobs.toml):
+- hunt: the page's "Claim All" (green; finished hunts) -> tap away the rewards -> "Hunt All" (teal; pets out)
 - ally_treasure: Ally Treasure (bottom right) -> its "Claim All" (green) -> tap away the rewards -> close (X)
 - my_shares: Ally Treasure -> red dot on "My Shares": that tab -> tap every teal "Share" -> close (X)
-- hunt: the page's "Claim All" (green; finished hunts) -> tap away the rewards -> "Hunt All" (teal; pets out)
 Then Back to the world map.
 Each button only when it's there and in its colour; Ally Treasure has no Claim All once the day's claims are used.
 No Pet Adventure row in the Daily tab (hidden once done): nothing to do.
@@ -60,7 +60,7 @@ def pet_adventure(app: Kingshot, phone: Phone, log: Logger):
     phone.wait_for(text="Pet Adventure", region=PET_TITLE, timeout=10)
     log.info("pet adventure open")
 
-    run_parts(app, phone, log, {"ally_treasure": ally_treasure, "my_shares": my_shares, "hunt": hunt})
+    run_parts(app, phone, log, {"hunt": hunt, "ally_treasure": ally_treasure, "my_shares": my_shares})
     phone.back()  # Pet Adventure -> world map
     time.sleep(1.5)
 

@@ -45,9 +45,9 @@ cassie_recruit = true
 truegold_crucible = true
 
 [parts.pet_adventure]
+hunt = true          # finished hunts: Claim All, then Hunt All
 ally_treasure = true # Ally Treasure: green Claim All
 my_shares = true     # Ally Treasure > My Shares (red dot): tap every Share
-hunt = true          # finished hunts: Claim All, then Hunt All
 
 [parts.claim_rewards]
 mail_rewards = true
